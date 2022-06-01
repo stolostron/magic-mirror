@@ -37,4 +37,7 @@ jobs:
         run: npm run lint
 
       - name: Run the tests
-        run: npm test
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "<>"
+          npm test
