@@ -77,7 +77,7 @@ test("Database.getDBPath config", () => {
 });
 
 test("Database.getDBPath default prod path", () => {
-  const prodDBPath = "/etc/upstream-syncer/syncer.db";
+  const prodDBPath = "/etc/magic-mirror/magic-mirror.db";
 
   const fsMock = jest.spyOn(fs, "existsSync");
   fsMock.mockImplementation((path: fs.PathLike) => path == prodDBPath);
