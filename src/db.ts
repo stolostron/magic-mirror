@@ -2,7 +2,7 @@ import fs from "fs";
 
 import sqlite3 from "sqlite3";
 
-const DEFAULT_DB_PATH = "/etc/upstream-syncer/syncer.db";
+const DEFAULT_DB_PATH = "/etc/magic-mirror/magic-mirror.db";
 
 const createSQLStatements = [
   // A table to store an upstream or fork repo. It's only useful as a foreign key in an effort of data deduplication.
@@ -153,8 +153,8 @@ export class Database {
   /**
    * Find the database path.
    *
-   * This prioritizes dbPath set in the configuration followed by: an existing ./syncer.db file, an existing production
-   * database set in DEFAULTDB_PATH, or a non-existent ./syncer.db file.
+   * This prioritizes dbPath set in the configuration followed by an existing ./syncer.db file and an existing
+   * production database set in DEFAULTDB_PATH.
    * @param {object} config the configuration object with dbPath optionally set.
    * @return {string} the database path to use when instantiating the Database class.
    */
@@ -163,11 +163,8 @@ export class Database {
       return config.dbPath;
     } else if (fs.existsSync("syncer.db")) {
       return "syncer.db";
-    } else if (fs.existsSync(DEFAULT_DB_PATH)) {
-      return DEFAULT_DB_PATH;
     } else {
-      // Default to a database in the current directory
-      return "syncer.db";
+      return DEFAULT_DB_PATH;
     }
   }
 
