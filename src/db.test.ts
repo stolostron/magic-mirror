@@ -10,7 +10,7 @@ let db: Database;
 beforeEach(async () => {
   jest.restoreAllMocks();
   dirObj = tmp.dirSync({ keep: true, unsafeCleanup: true });
-  db = new Database(path.join(dirObj.name, "syncer.db"));
+  db = new Database(path.join(dirObj.name, "magic-mirror.db"));
   await db.init();
 });
 
@@ -86,7 +86,7 @@ test("Database.getDBPath default prod path", () => {
 });
 
 test("Database.getDBPath local path", () => {
-  const localPath = "syncer.db";
+  const localPath = "magic-mirror.db";
 
   const fsMock = jest.spyOn(fs, "existsSync");
   fsMock.mockImplementation((path: fs.PathLike) => path == localPath);

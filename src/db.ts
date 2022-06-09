@@ -153,7 +153,7 @@ export class Database {
   /**
    * Find the database path.
    *
-   * This prioritizes dbPath set in the configuration followed by an existing ./syncer.db file and an existing
+   * This prioritizes dbPath set in the configuration followed by an existing ./magic-mirror.db file and an existing
    * production database set in DEFAULTDB_PATH.
    * @param {object} config the configuration object with dbPath optionally set.
    * @return {string} the database path to use when instantiating the Database class.
@@ -161,8 +161,8 @@ export class Database {
   static getDbPath(config: { [key: string]: any }): string {
     if (config.dbPath) {
       return config.dbPath;
-    } else if (fs.existsSync("syncer.db")) {
-      return "syncer.db";
+    } else if (fs.existsSync("magic-mirror.db")) {
+      return "magic-mirror.db";
     } else {
       return DEFAULT_DB_PATH;
     }
