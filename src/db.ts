@@ -349,8 +349,8 @@ export class Database {
       pendingPR.upstreamRepo.id,
       pendingPR.upstreamPRIDs.join(","),
       pendingPR.action,
-      pendingPR.prID || null,
-      pendingPR.githubIssue || null,
+      pendingPR.prID,
+      pendingPR.githubIssue,
     ]);
   }
 }
