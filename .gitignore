@@ -3,5 +3,5 @@ build/
 config.json
 *.key
 .vscode/
-syncer.db
+magic-mirror.db
 coverage/

@@ -58,7 +58,7 @@ beforeEach(async () => {
 
   dirObj = tmp.dirSync({ keep: true, unsafeCleanup: true });
   syncer = new Syncer(config);
-  const db = new Database(path.join(dirObj.name, "syncer.db"));
+  const db = new Database(path.join(dirObj.name, "magic-mirror.db"));
   await db.init();
   syncer.db = db;
 });
