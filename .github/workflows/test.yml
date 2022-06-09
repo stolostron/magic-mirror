@@ -31,7 +31,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Install the dependencies
-        run: npm install --also=dev
+        run: npm install --include=dev
 
       - name: Lint
         run: npm run lint
