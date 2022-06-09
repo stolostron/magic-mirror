@@ -43,6 +43,7 @@ beforeEach(async () => {
   config = {
     appID: 2,
     logLevel: "debug",
+    privateKey: "some private key",
     upstreamMappings: {
       stolostron: {
         "open-cluster-management-io": {
@@ -56,7 +57,7 @@ beforeEach(async () => {
   };
 
   dirObj = tmp.dirSync({ keep: true, unsafeCleanup: true });
-  syncer = new Syncer(config, "some private key");
+  syncer = new Syncer(config);
   const db = new Database(path.join(dirObj.name, "syncer.db"));
   await db.init();
   syncer.db = db;
@@ -177,7 +178,7 @@ test("Syncer.getPRDiffs", async () => {
     ),
   );
 
-  const syncer = new Syncer(config, "some private key");
+  const syncer = new Syncer(config);
   await expect(syncer.getPRDiffs(mockClient, "org", "repo", [3, 5])).resolves.toEqual({
     "3": "some diff",
     "5": "some other diff",
@@ -507,7 +508,7 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
 
 test("Syncer.init", async () => {
   config.dbPath = path.join(dirObj.name, "init-test.db");
-  const syncer = new Syncer(config, "some private key");
+  const syncer = new Syncer(config);
   const mockAppClient = jest.fn();
   mockAppClient.apps = jest.fn();
   mockAppClient.apps.listInstallations = jest.fn().mockResolvedValueOnce({

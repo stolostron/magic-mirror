@@ -1,5 +1,3 @@
-import fs from "fs";
-
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import winston from "winston";
@@ -8,8 +6,6 @@ import { Config } from "./config";
 import { Database, PRAction, Repo } from "./db";
 import { applyPatches } from "./git";
 import { createFailureIssue } from "./github";
-
-const DEFAULT_PRIVATE_KEY_PATH = "/etc/magic-mirror/auth.key";
 
 /**
  * Syncer is the backend of Magic Mirror, which monitors upstream and creates PRs on forks.
@@ -23,8 +19,6 @@ export class Syncer {
   private db?: Database;
   // logger is a Winston logger that logs to the console.
   private logger: winston.Logger;
-  // privateKey is the string format of the private key used to authenticate as the GitHub app.
-  private privateKey: string;
   // orgs is an object where the keys are GitHub organizations and each value has the associated GitHub client
   // authenticated as the GitHub app installation, the GitHub app installation ID, and the repo names that the GitHub
   // app is installed on.
@@ -36,30 +30,10 @@ export class Syncer {
   /**
    * Instantiate a Syncer object.
    *
-   * The configuration is validated and the private key is read from disk but there is no network connectivity. That is
-   * handled in the init method.
    * @param {Config} config the configuration object of the Syncer.
-   * @param {string} privateKey an optional private key (not path) instead of reading it from disk.
    */
-  constructor(config: Config, privateKey?: string) {
+  constructor(config: Config) {
     this.config = config;
-
-    if (!privateKey) {
-      let keyPath: string;
-      if (this.config.privateKeyPath) {
-        keyPath = this.config.privateKeyPath;
-      } else if (fs.existsSync("auth.key")) {
-        keyPath = "auth.key";
-      } else if (fs.existsSync(DEFAULT_PRIVATE_KEY_PATH)) {
-        keyPath = DEFAULT_PRIVATE_KEY_PATH;
-      } else {
-        throw new Error("No auth.key could be found");
-      }
-
-      this.privateKey = fs.readFileSync(keyPath, "utf-8");
-    } else {
-      this.privateKey = privateKey;
-    }
 
     // Log out to the console. This is suited for a containerized deployment.
     this.logger = winston.createLogger({
@@ -111,7 +85,7 @@ export class Syncer {
   private getGitHubClient(installationID?: number): Octokit {
     const auth: any = {
       appId: this.config.appID,
-      privateKey: this.privateKey,
+      privateKey: this.config.privateKey,
     };
 
     if (installationID) {
@@ -256,7 +230,7 @@ export class Syncer {
   private async getToken(org: string): Promise<string> {
     const auth = createAppAuth({
       appId: this.config.appID,
-      privateKey: this.privateKey,
+      privateKey: this.config.privateKey,
     });
 
     // Retrieve installation access token
