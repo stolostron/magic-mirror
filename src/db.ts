@@ -43,7 +43,7 @@ const createSQLStatements = [
   // new upstream PR is merged while there is a pending PR, the app should replace the pending PR with a new PR to also
   // include the commits from the new upstream PR.
   `
-  CREATE TABLE IF NOT EXISTS pending_prs
+    CREATE TABLE IF NOT EXISTS pending_prs
       (
           id INTEGER PRIMARY KEY autoincrement,
           repo_id INTEGER NOT NULL,
@@ -56,10 +56,10 @@ const createSQLStatements = [
           FOREIGN KEY(repo_id) REFERENCES repos(id)
           FOREIGN KEY(upstream_repo_id) REFERENCES repos(id)
       )
-`,
+  `,
   `
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_prs ON pending_prs (repo_id, upstream_repo_id, branch);
-`,
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_prs ON pending_prs (repo_id, upstream_repo_id, branch);
+  `,
 ];
 
 /**
