@@ -4,7 +4,7 @@
   "description": "GitHub App that syncs upstream repositories with forks using PRs",
   "scripts": {
     "lint": "eslint src/*",
-    "test": "jest"
+    "test": "jest --runInBand"
   },
   "author": "Red Hat",
   "license": "GPL-3.0-or-later",
@@ -34,7 +34,7 @@
     "collectCoverage": true,
     "coverageThreshold": {
       "global": {
-        "lines": 80
+        "lines": 90
       }
     }
   }

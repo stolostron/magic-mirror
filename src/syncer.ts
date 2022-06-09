@@ -4,34 +4,12 @@ import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import winston from "winston";
 
+import { Config } from "./config";
 import { Database, PRAction, Repo } from "./db";
 import { applyPatches } from "./git";
 import { createFailureIssue } from "./github";
 
-const DEFAULT_CONFIG_PATH = "/etc/magic-mirror/config.json";
 const DEFAULT_PRIVATE_KEY_PATH = "/etc/magic-mirror/auth.key";
-
-/**
- * Config is the deserialized form of the user provided configuration.
- */
-export type Config = {
-  appID: number;
-  dbPath?: string;
-  logLevel?: string;
-  privateKeyPath?: string;
-  upstreamMappings: {
-    // Fork organization
-    [key: string]: {
-      // Upstream organization
-      [key: string]: {
-        branchMappings: {
-          // Upstream branch to Fork branch
-          [key: string]: string;
-        };
-      };
-    };
-  };
-};
 
 /**
  * Syncer is the backend of Magic Mirror, which monitors upstream and creates PRs on forks.
@@ -58,28 +36,13 @@ export class Syncer {
   /**
    * Instantiate a Syncer object.
    *
-   * The configuration is validated and the configuration file and private key are read from disk but there is no
-   * network connectivity. That is handled in the init method.
-   * @param {Config} config an optional configuration object instead of loading the JSON file from disk.
+   * The configuration is validated and the private key is read from disk but there is no network connectivity. That is
+   * handled in the init method.
+   * @param {Config} config the configuration object of the Syncer.
    * @param {string} privateKey an optional private key (not path) instead of reading it from disk.
    */
-  constructor(config?: Config, privateKey?: string) {
-    if (!config) {
-      let path: string;
-      if (fs.existsSync("config.json")) {
-        path = "config.json";
-      } else if (fs.existsSync(DEFAULT_CONFIG_PATH)) {
-        path = DEFAULT_CONFIG_PATH;
-      } else {
-        throw new Error("No config.json could be found");
-      }
-
-      this.config = JSON.parse(fs.readFileSync(path).toString());
-    } else {
-      this.config = config;
-    }
-
-    this.validateConfig();
+  constructor(config: Config, privateKey?: string) {
+    this.config = config;
 
     if (!privateKey) {
       let keyPath: string;
@@ -585,75 +548,6 @@ export class Syncer {
               this.logger.error(`The ${org}/${repo} ${branch} branch couldn't be handled: ${err}`);
             }
           }
-        }
-      }
-    }
-  }
-
-  /**
-   * Validate the Syncer config object.
-   *
-   * An error is thrown if the Syncer config is invalid.
-   */
-  private validateConfig() {
-    if (!this.config.appID || typeof this.config.appID !== "number") {
-      throw new Error('The configuration\'s "appID" must be set as a number');
-    }
-
-    if (this.config.logLevel && typeof this.config.logLevel !== "string") {
-      throw new Error('The configuration\'s optional "logLevel" must be a string');
-    }
-
-    if (this.config.privateKeyPath) {
-      if (typeof this.config.privateKeyPath !== "string") {
-        throw new Error('The configuration\'s "privateKeyPath" must be a string');
-      }
-
-      if (!fs.existsSync(this.config.privateKeyPath)) {
-        throw new Error('The configuration\'s "privateKeyPath" must be a valid path to a file that exists');
-      }
-    }
-
-    if (!this.config.upstreamMappings || typeof this.config.upstreamMappings !== "object") {
-      throw new Error('The configuration\'s "upstreamMappings" must be a valid object');
-    }
-
-    for (const targetOrg in this.config.upstreamMappings) {
-      if (typeof this.config.upstreamMappings[targetOrg] !== "object") {
-        throw new Error(`The configuration's upstreamMappings["${targetOrg}"] must be a valid object"`);
-      }
-
-      for (const upstreamOrg in this.config.upstreamMappings[targetOrg]) {
-        if (typeof this.config.upstreamMappings[targetOrg][upstreamOrg] !== "object") {
-          throw new Error(
-            `The configuration's upstreamMappings["${targetOrg}"]["${upstreamOrg}"] must be a valid object"`,
-          );
-        }
-
-        const branchMappings = this.config.upstreamMappings[targetOrg][upstreamOrg].branchMappings;
-        if (!branchMappings || typeof branchMappings !== "object") {
-          throw new Error(
-            `The configuration's upstreamMappings["${targetOrg}"]["${upstreamOrg}"]["branchMappings"] must ` +
-              "be a valid object",
-          );
-        }
-
-        for (const upstreamBranch in branchMappings) {
-          const targetBranch = branchMappings[upstreamBranch];
-          if (!targetBranch || typeof targetBranch !== "string") {
-            throw new Error(
-              `The configuration's upstreamMappings["${targetOrg}"]["${upstreamOrg}"]["branchMappings"]` +
-                `["${upstreamBranch}"] must be a non-empty string"`,
-            );
-          }
-        }
-
-        const targetBranches = Object.values(branchMappings);
-        if (targetBranches.length != +new Set(targetBranches).size) {
-          throw new Error(
-            `The configuration's upstreamMappings["${targetOrg}"]["${upstreamOrg}"]["branchMappings"] contains ` +
-              "duplicate target branches",
-          );
         }
       }
     }
