@@ -8,6 +8,7 @@ beforeEach(() => {
   config = {
     appID: 2,
     logLevel: "debug",
+    privateKey: "some private key",
     upstreamMappings: {
       stolostron: {
         "open-cluster-management-io": {
@@ -21,29 +22,73 @@ beforeEach(() => {
   };
 });
 
-test("loadConfig local config.json", () => {
+test("loadConfig local config.json and private key", () => {
+  const expectedConfig = JSON.parse(JSON.stringify(config));
+  config.privateKey = "";
   const mockFsExistsSync = jest.spyOn(fs, "existsSync");
-  mockFsExistsSync.mockImplementation((path: fs.PathLike) => path == "config.json");
+  mockFsExistsSync.mockImplementation((path: fs.PathLike) => path == "config.json" || path == "auth.key");
   const mockFsreadFileSync = jest.spyOn(fs, "readFileSync");
-  mockFsreadFileSync.mockImplementation(() => JSON.stringify(config));
+  mockFsreadFileSync.mockImplementation((path: fs.PathOrFileDescriptor) => {
+    if (path == "config.json") {
+      return JSON.stringify(config);
+    }
 
-  expect(loadConfig()).toEqual(config);
+    return "some private key";
+  });
+
+  expect(loadConfig()).toEqual(expectedConfig);
 });
 
-test("loadConfig production config.json", () => {
+test("loadConfig production config.json and private key", () => {
+  const expectedConfig = JSON.parse(JSON.stringify(config));
+  config.privateKey = "";
   const mockFsExistsSync = jest.spyOn(fs, "existsSync");
-  mockFsExistsSync.mockImplementation((path: fs.PathLike) => path == "/etc/magic-mirror/config.json");
+  mockFsExistsSync.mockImplementation(
+    (path: fs.PathLike) => path == "/etc/magic-mirror/config.json" || path == "/etc/magic-mirror/auth.key",
+  );
   const mockFsreadFileSync = jest.spyOn(fs, "readFileSync");
-  mockFsreadFileSync.mockImplementation(() => JSON.stringify(config));
+  mockFsreadFileSync.mockImplementation((path: fs.PathOrFileDescriptor) => {
+    if (path == "/etc/magic-mirror/config.json") {
+      return JSON.stringify(config);
+    }
 
-  expect(loadConfig()).toEqual(config);
+    return "some private key";
+  });
+
+  expect(loadConfig()).toEqual(expectedConfig);
 });
 
-test("loadConfig does not exist", () => {
+test("loadConfig production config.json and private key from config path", () => {
+  config.privateKeyPath = "/path/to/auth.key";
+  const expectedConfig = JSON.parse(JSON.stringify(config));
+  config.privateKey = "";
+
+  const mockFsExistsSync = jest.spyOn(fs, "existsSync");
+  mockFsExistsSync.mockImplementation(() => true);
+  const mockFsreadFileSync = jest.spyOn(fs, "readFileSync");
+  mockFsreadFileSync.mockImplementation((path: fs.PathOrFileDescriptor) => {
+    if (path == "config.json") {
+      return JSON.stringify(config);
+    }
+
+    return "some private key";
+  });
+
+  expect(loadConfig()).toEqual(expectedConfig);
+});
+
+test("loadConfig config.json does not exist", () => {
   const mockFsExistsSync = jest.spyOn(fs, "existsSync");
   mockFsExistsSync.mockImplementation(() => false);
 
-  expect(loadConfig).toThrowError();
+  expect(loadConfig).toThrowError("No config.json could be found");
+});
+
+test("loadConfig private key does not exist", () => {
+  const mockFsExistsSync = jest.spyOn(fs, "existsSync");
+  mockFsExistsSync.mockImplementation((path: fs.PathLike) => path.toString().endsWith(".json"));
+
+  expect(loadConfig).toThrowError("No auth.key could be found");
 });
 
 test("validateConfig", () => {

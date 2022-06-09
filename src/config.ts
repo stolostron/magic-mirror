@@ -1,6 +1,7 @@
 import fs from "fs";
 
 const DEFAULT_CONFIG_PATH = "/etc/magic-mirror/config.json";
+const DEFAULT_PRIVATE_KEY_PATH = "/etc/magic-mirror/auth.key";
 
 /**
  * Config is the deserialized form of the user provided configuration.
@@ -9,6 +10,7 @@ export type Config = {
   appID: number;
   dbPath?: string;
   logLevel?: string;
+  privateKey: string;
   privateKeyPath?: string;
   upstreamMappings: {
     // Fork organization
@@ -40,6 +42,19 @@ export function loadConfig(): Config {
 
   const config = JSON.parse(fs.readFileSync(path).toString());
   validateConfig(config);
+
+  let keyPath: string;
+  if (config.privateKeyPath) {
+    keyPath = config.privateKeyPath;
+  } else if (fs.existsSync("auth.key")) {
+    keyPath = "auth.key";
+  } else if (fs.existsSync(DEFAULT_PRIVATE_KEY_PATH)) {
+    keyPath = DEFAULT_PRIVATE_KEY_PATH;
+  } else {
+    throw new Error("No auth.key could be found");
+  }
+
+  config.privateKey = fs.readFileSync(keyPath, "utf-8");
 
   return config;
 }
