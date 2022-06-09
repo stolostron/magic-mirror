@@ -180,25 +180,17 @@ export class Database {
    *   It rejects if the database query fails.
    */
   async getLastHandledPR(repo: Repo, upstreamRepo: Repo, branch: string): Promise<number | null> {
-    return new Promise((resolve, reject) => {
-      const sql = `
-                SELECT upstream_pr_id
-                FROM last_handled_prs
-                WHERE repo_id=? AND upstream_repo_id=? AND branch=?
-            `;
-      this.get(sql, [repo.id, upstreamRepo.id, branch])
-        .then((result) => {
-          if (!result) {
-            resolve(null);
-            return;
-          }
+    const sql = `
+      SELECT upstream_pr_id
+      FROM last_handled_prs
+      WHERE repo_id=? AND upstream_repo_id=? AND branch=?
+    `;
+    const result = await this.get(sql, [repo.id, upstreamRepo.id, branch]);
+    if (!result) {
+      return null;
+    }
 
-          resolve(result.upstream_pr_id);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+    return result.upstream_pr_id;
   }
 
   /**
@@ -208,29 +200,19 @@ export class Database {
    * @return {Promise<Repo>} A promise that resolves to a Repo object and rejects if the database statements fail.
    */
   async getOrCreateRepo(organization: string, name: string): Promise<Repo> {
-    return new Promise((resolve, reject) => {
-      const sql = "INSERT OR IGNORE INTO repos (organization, name) VALUES(?, ?)";
-      // Can't rely on the returned last ID because when the "OR IGNORE" is executed,
-      // the last ID is inaccurate.
-      this.run(sql, [organization, name])
-        .then(() => {
-          const getIDSql = "SELECT id FROM repos WHERE organization=? AND name=?";
-          this.get(getIDSql, [organization, name])
-            .then((row) => {
-              resolve({
-                id: row.id,
-                organization: organization,
-                name: name,
-              });
-            })
-            .catch((err) => {
-              reject(err);
-            });
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+    const sql = "INSERT OR IGNORE INTO repos (organization, name) VALUES(?, ?)";
+    // Can't rely on the returned last ID because when the "OR IGNORE" is executed,
+    // the last ID is inaccurate.
+    await this.run(sql, [organization, name]);
+
+    const getIDSql = "SELECT id FROM repos WHERE organization=? AND name=?";
+    const row = await this.get(getIDSql, [organization, name]);
+
+    return {
+      id: row.id,
+      organization: organization,
+      name: name,
+    };
   }
 
   /**
@@ -242,38 +224,27 @@ export class Database {
    *   pending PR. It rejects to if the database query fails.
    */
   async getPendingPR(repo: Repo, upstreamRepo: Repo, branch: string): Promise<PendingPR | null> {
-    return new Promise((resolve, reject) => {
-      const sql = `
-                SELECT upstream_pr_ids, action, pr_id, github_issue
-                FROM pending_prs
-                WHERE repo_id=? AND upstream_repo_id=? AND branch=?
-            `;
-      this.get(sql, [repo.id, upstreamRepo.id, branch])
-        .then((result) => {
-          if (!result) {
-            resolve(null);
-            return;
-          }
+    const sql = `
+      SELECT upstream_pr_ids, action, pr_id, github_issue
+      FROM pending_prs
+      WHERE repo_id=? AND upstream_repo_id=? AND branch=?
+    `;
+    const result = await this.get(sql, [repo.id, upstreamRepo.id, branch]);
+    if (!result) {
+      return null;
+    }
 
-          const upstreamPRIDs = [];
-          for (const idStr of (result.upstream_pr_ids as string).split(",")) {
-            upstreamPRIDs.push(parseInt(idStr));
-          }
+    const upstreamPRIDs = (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr));
 
-          resolve({
-            repo: repo,
-            branch: branch,
-            upstreamRepo: upstreamRepo,
-            upstreamPRIDs: upstreamPRIDs,
-            action: result.action,
-            prID: result.pr_id,
-            githubIssue: result.github_issue,
-          });
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+    return {
+      repo: repo,
+      branch: branch,
+      upstreamRepo: upstreamRepo,
+      upstreamPRIDs: upstreamPRIDs,
+      action: result.action,
+      prID: result.pr_id,
+      githubIssue: result.github_issue,
+    };
   }
 
   /**
@@ -339,23 +310,15 @@ export class Database {
    * @return {Promise<void>} a promise that resolves to nothing and rejects if the database statement failed.
    */
   async setLastHandledPR(repo: Repo, upstreamRepo: Repo, branch: string, upstreamPRID: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const sql = `
-          INSERT INTO last_handled_prs (
-            repo_id, branch, upstream_repo_id, upstream_pr_id
-          )
-          VALUES(?, ?, ?, ?)
-          ON CONFLICT(repo_id, upstream_repo_id, branch)
-          DO UPDATE SET upstream_pr_id=excluded.upstream_pr_id
-      `;
-      this.run(sql, [repo.id, branch, upstreamRepo.id, upstreamPRID])
-        .then(() => {
-          resolve();
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+    const sql = `
+      INSERT INTO last_handled_prs (
+        repo_id, branch, upstream_repo_id, upstream_pr_id
+      )
+      VALUES(?, ?, ?, ?)
+      ON CONFLICT(repo_id, upstream_repo_id, branch)
+      DO UPDATE SET upstream_pr_id=excluded.upstream_pr_id
+    `;
+    await this.run(sql, [repo.id, branch, upstreamRepo.id, upstreamPRID]);
   }
 
   /**
@@ -368,34 +331,26 @@ export class Database {
    * @return {Promise<void>} a promise that resolves to nothing and rejects if the database statement failed.
    */
   async setPendingPR(pendingPR: PendingPR): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const sql = `
-          INSERT INTO pending_prs (
-            repo_id, branch, upstream_repo_id, upstream_pr_ids, action, pr_id, github_issue
-          )
-          VALUES(?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(repo_id, upstream_repo_id, branch)
-          DO UPDATE SET 
-            upstream_pr_ids=excluded.upstream_pr_ids,
-            action=excluded.action,
-            pr_id=excluded.pr_id,
-            github_issue=excluded.github_issue
-      `;
-      this.run(sql, [
-        pendingPR.repo.id,
-        pendingPR.branch,
-        pendingPR.upstreamRepo.id,
-        pendingPR.upstreamPRIDs.join(","),
-        pendingPR.action,
-        pendingPR.prID || null,
-        pendingPR.githubIssue || null,
-      ])
-        .then(() => {
-          resolve();
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+    const sql = `
+      INSERT INTO pending_prs (
+        repo_id, branch, upstream_repo_id, upstream_pr_ids, action, pr_id, github_issue
+      )
+      VALUES(?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(repo_id, upstream_repo_id, branch)
+      DO UPDATE SET
+        upstream_pr_ids=excluded.upstream_pr_ids,
+        action=excluded.action,
+        pr_id=excluded.pr_id,
+        github_issue=excluded.github_issue
+    `;
+    await this.run(sql, [
+      pendingPR.repo.id,
+      pendingPR.branch,
+      pendingPR.upstreamRepo.id,
+      pendingPR.upstreamPRIDs.join(","),
+      pendingPR.action,
+      pendingPR.prID || null,
+      pendingPR.githubIssue || null,
+    ]);
   }
 }
