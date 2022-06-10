@@ -27,14 +27,16 @@ export async function createFailureIssue(
   const prPrefix = `\n* ${upstreamOrg}/${repo}#`;
   let body =
     `🪞 Magic Mirror 🪞 failed to sync the following upstream pull-requests because ${reason}:` +
-    `${prPrefix}${upstreamPRIDs.join(prPrefix)}\n\n` +
+    `${prPrefix}${upstreamPRIDs.join(prPrefix)}\n\n`;
+
+  if (prID) {
+    body += `The pull-request (#${prID}) can be reviewed for more information.\n\n`;
+  }
+
+  body +=
     `Syncing is paused for the branch ${branch} on ${org}/${repo} until the issue is manually resolved and this ` +
     "issue is closed.\n\n" +
     "![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)";
-
-  if (prID) {
-    body += `\n\nThe pull-request (#${prID}) can reviewed for more information.`;
-  }
 
   const resp = await client.issues.create({ owner: org, repo: repo, title: title, body: body });
   return resp.data.number;

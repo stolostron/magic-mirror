@@ -35,8 +35,8 @@ beforeEach(async () => {
   jest.restoreAllMocks();
   (applyPatches as jest.Mock).mockImplementation(
     () =>
-      new Promise<void>((resolve) => {
-        resolve();
+      new Promise<boolean>((resolve) => {
+        resolve(true);
       }),
   );
 
@@ -503,7 +503,7 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
   syncer.getToken = jest.fn().mockResolvedValue("secret token");
   (applyPatches as jest.Mock).mockImplementation(
     () =>
-      new Promise<void>((_, reject) => {
+      new Promise<bool>((_, reject) => {
         reject(new Error("some error"));
       }),
   );
@@ -525,6 +525,38 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toBeNull();
   expect(pendingPR?.githubIssue).toEqual(8);
+});
+
+test("Syncer.handleForkedBranch patch causes no change in Git history", async () => {
+  syncer.orgs = { stolostron: {} };
+  syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4]);
+  syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4] });
+  syncer.getPRDiffs = jest.fn().mockResolvedValue({ 4: "some diff" });
+  syncer.getToken = jest.fn().mockResolvedValue("secret token");
+  (applyPatches as jest.Mock).mockImplementation(
+    () =>
+      new Promise<bool>((resolve) => {
+        resolve(false);
+      }),
+  );
+
+  const db = syncer.db as Database;
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  // Verify that the last handled PR is the upstream PR that didn't change the Git history.
+  await db.setLastHandledPR(repo, upstreamRepo, "release-2.5", 3);
+
+  await expect(
+    syncer.handleForkedBranch(
+      "stolostron",
+      "open-cluster-management-io",
+      "config-policy-controller",
+      "release-2.5",
+      "main",
+    ),
+  ).resolves.not.toThrowError();
+  expect(await db.getPendingPR(repo, upstreamRepo, "release-2.5")).toBeNull();
+  expect(await db.getLastHandledPR(repo, upstreamRepo, "release-2.5")).toEqual(4);
 });
 
 test("Syncer.init", async () => {

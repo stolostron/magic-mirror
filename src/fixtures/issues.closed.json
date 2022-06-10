@@ -1,0 +1,15 @@
+{
+  "action": "closed",
+  "issue": {
+    "number": 1
+  },
+  "repository": {
+    "name": "config-policy-controller",
+    "owner": {
+      "login": "stolostron"
+    }
+  },
+  "installation": {
+    "id": 2
+  }
+}

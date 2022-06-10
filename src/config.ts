@@ -12,6 +12,7 @@ export type Config = {
   logLevel?: string;
   privateKey: string;
   privateKeyPath?: string;
+  syncInterval?: number;
   upstreamMappings: {
     // Fork organization
     [key: string]: {
@@ -24,6 +25,7 @@ export type Config = {
       };
     };
   };
+  webhookSecret?: string;
 };
 
 /**
@@ -84,6 +86,10 @@ export function validateConfig(config: Config) {
     }
   }
 
+  if (config.syncInterval && typeof config.syncInterval !== "number") {
+    throw new Error('The configuration\'s "syncInterval" must be a number');
+  }
+
   if (!config.upstreamMappings || typeof config.upstreamMappings !== "object") {
     throw new Error('The configuration\'s "upstreamMappings" must be a valid object');
   }
@@ -126,5 +132,9 @@ export function validateConfig(config: Config) {
         );
       }
     }
+  }
+
+  if (config.webhookSecret && typeof config.webhookSecret !== "string") {
+    throw new Error('The configuration\'s optional "webhookSecret" must be a string');
   }
 }

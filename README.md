@@ -35,6 +35,7 @@ The GitHub App requires the following repository permissions:
 The GitHub app requires being subscribed to the following events:
 
 - [Check suite](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#check_suite)
+- [Issues](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#issues)
 - [Pull request](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request)
 
 ## Configuration
@@ -45,8 +46,11 @@ The GitHub app requires being subscribed to the following events:
 - `logLevel` - an optional log level to set. This defaults to `info`. Other options include `debug` or `error`.
 - `privateKeyPath` - an optional path to the GitHub App private key used during authentication with the GitHub API. This
   defaults to `/etc/magic-mirror/auth.key`.
+- `syncInterval` - an optional interval in seconds for how often Magic Mirror should check for new merged upstream PRs.
+  This defaults to `30`.
 - `upstreamMappings` - the object that determines which upstream branches should be synced to which fork branches. See
   the example configure below for a better understanding.
+- `webhookSecret` - the optional secret that the GitHub webhook event must provide for it to be processed.
 
 Below is an example configuration that syncs from the `main` and `release-0.7` branches in the
 `open-cluster-management-io` GitHub organization to the `release-2.6` and `release-2.5` branches in the `stolostron`
@@ -60,6 +64,7 @@ installation.
   "dbPath": "/etc/magic-mirror/magic-mirror.db",
   "logLevel": "info",
   "privateKeyPath": "/etc/magic-mirror/auth.key",
+  "syncInterval": 30,
   "upstreamMappings": {
     "stolostron": {
       "open-cluster-management-io": {
@@ -69,6 +74,7 @@ installation.
         }
       }
     }
-  }
+  },
+  "webhookSecret": "my-secret"
 }
 ```

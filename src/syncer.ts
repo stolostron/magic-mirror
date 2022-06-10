@@ -6,6 +6,7 @@ import { Config } from "./config";
 import { Database, PRAction, Repo } from "./db";
 import { applyPatches } from "./git";
 import { createFailureIssue } from "./github";
+import { newLogger } from "./log";
 
 /**
  * Syncer is the backend of Magic Mirror, which monitors upstream and creates PRs on forks.
@@ -34,14 +35,7 @@ export class Syncer {
    */
   constructor(config: Config) {
     this.config = config;
-
-    // Log out to the console. This is suited for a containerized deployment.
-    this.logger = winston.createLogger({
-      level: this.config.logLevel || "info",
-      format: winston.format.simple(),
-      transports: [new winston.transports.Console()],
-    });
-
+    this.logger = newLogger(config.logLevel);
     this.orgs = {};
   }
 
@@ -391,8 +385,9 @@ export class Syncer {
     const token = await this.getToken(org);
     const gitRemote = `https://x-access-token:${token}@github.com/${org}/${repoName}.git`;
 
+    let patchesChangedRepo: boolean;
     try {
-      await applyPatches(gitRemote, branch, targetBranch, Object.values(diffs));
+      patchesChangedRepo = await applyPatches(gitRemote, branch, targetBranch, Object.values(diffs));
     } catch (err) {
       this.logger.error(
         `Failed to apply the patches on the "${branch}" branch on ${org}/${repoName} from the following PRs from ` +
@@ -418,11 +413,23 @@ export class Syncer {
         prID: null,
       });
 
-      this.logger.info(`Created the GitHub issue #${issueID} to notify of the failure`);
+      this.logger.info(
+        `Created the GitHub issue #${issueID} on ${repo.organization}/${repo.name} to notify of the failure`,
+      );
       return;
     }
 
     const prPrefix = `\n* ${upstreamOrg}/${repoName}#`;
+
+    if (!patchesChangedRepo) {
+      this.logger.info(
+        `Skipping the following PRs from ${upstreamOrg}/${repo.name} on the ${repo.organization}/${repo.name} ` +
+          `${branch} branch because it did not change the Git history:${prPrefix}${prIDs.join(prPrefix)}`,
+      );
+      await this.db?.setLastHandledPR(repo, upstreamRepo, branch, prIDs[prIDs.length - 1]);
+      return;
+    }
+
     let prBody = `Syncing the following PRs:${prPrefix}${prIDs.join(prPrefix)}`;
     if (closedPreviousPR) {
       prBody += `\n\nThis replaces #${closedPreviousPR}.`;

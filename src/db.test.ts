@@ -26,6 +26,17 @@ test("Database.getOrCreateRepo", async () => {
   });
 });
 
+test("Database.getRepoByID", async () => {
+  expect(await db.getOrCreateRepo("kramerica", "industries")).toEqual({
+    id: 1,
+    organization: "kramerica",
+    name: "industries",
+  });
+
+  expect((await db.getRepoByID(1))?.id).toEqual(1);
+  expect(await db.getRepoByID(23)).toBe(null);
+});
+
 test("Database.init invalid path", async () => {
   db = new Database("/this/does/not/exist/for/sure/syncer.db");
   await expect(db.init()).rejects.toThrow();
@@ -58,7 +69,7 @@ test("Database pending_prs table", async () => {
     upstreamPRIDs: [4, 7],
     action: PRAction.Created,
     prID: 3,
-    githubIssue: null,
+    githubIssue: 4,
   };
 
   await db.setPendingPR(pendingPR);
@@ -66,9 +77,21 @@ test("Database pending_prs table", async () => {
   let pendingPRDB = await db.getPendingPR(repo, upstreamRepo, "main");
   expect(pendingPRDB).toEqual(pendingPR);
 
+  pendingPRDB = await db.getPendingPRByIssue(repo, 4);
+  expect(pendingPRDB).toEqual(pendingPR);
+
+  pendingPRDB = await db.getPendingPRByPRID(repo, 3);
+  expect(pendingPRDB).toEqual(pendingPR);
+
   await db.deletePendingPR(pendingPR);
 
   pendingPRDB = await db.getPendingPR(repo, upstreamRepo, "main");
+  expect(pendingPRDB).toBeNull();
+
+  pendingPRDB = await db.getPendingPRByIssue(repo, 4);
+  expect(pendingPRDB).toBeNull();
+
+  pendingPRDB = await db.getPendingPRByPRID(repo, 3);
   expect(pendingPRDB).toBeNull();
 });
 

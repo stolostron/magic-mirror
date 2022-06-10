@@ -3,14 +3,19 @@
   "version": "0.0.1",
   "description": "GitHub App that syncs upstream repositories with forks using PRs",
   "scripts": {
-    "lint": "eslint src/*",
-    "test": "jest --runInBand"
+    "build": "npx tsc",
+    "lint": "eslint src --ext .ts",
+    "run": "npm run build && concurrently npm:syncer npm:web -n syncer,web -c green,blue",
+    "syncer": "node ./build/scripts/start-syncer.js",
+    "web": "node ./build/scripts/start-web.js",
+    "test": "jest --runInBand ./src"
   },
   "author": "Red Hat",
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "@octokit/auth-app": "^3.6.1",
     "@octokit/rest": "^18.12.0",
+    "probot": "^12.2.4",
     "simple-git": "^3.7.1",
     "sqlite3": "^5.0.8",
     "tmp": "^0.2.1",
@@ -25,8 +30,10 @@
     "@types/tmp": "^0.2.3",
     "@typescript-eslint/eslint-plugin": "^5.27.0",
     "@typescript-eslint/parser": "^5.27.0",
+    "concurrently": "^7.2.1",
     "eslint": "^8.16.0",
     "eslint-config-google": "^0.14.0",
+    "nock": "^13.2.6",
     "ts-jest": "^27.1.5",
     "typescript": "^4.6.4"
   },

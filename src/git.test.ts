@@ -16,7 +16,6 @@ beforeEach(async () => {
     .init()
     .branch(["-m", "main"])
     .then(async () => {
-      const txtPath = path.join(dirObj.name, "message.txt");
       fs.writeFileSync(path.join(dirObj.name, "message.txt"), "Hello Raleigh!\n");
       await gitObj.add("message.txt").commit("Add a welcome message");
     });
@@ -71,12 +70,20 @@ index 382ca18..cea7f00 100644
     "",
   ];
 
-  const gitObj = simpleGit(dirObj.name);
-  expect(await applyPatches("file://" + dirObj.name, "main", "main-with-patch", patches)).toBeUndefined();
+  expect(await applyPatches("file://" + dirObj.name, "main", "main-with-patch", patches)).toBe(true);
   await gitObj.checkout("main-with-patch").then(() => {
     const textOutput = fs.readFileSync(path.join(dirObj.name, "message.txt"));
     expect(textOutput.toString()).toEqual("Hello Raleigh, NC, USA!\n");
   });
+});
+
+test("applyPatches with a patch that doesn't change the Git history", async () => {
+  fs.writeFileSync(path.join(dirObj.name, "message.txt"), "Hello\nRaleigh, NC!\n");
+  await gitObj.add("message.txt").commit("Add the state");
+
+  const patch = await gitObj.raw(["format-patch", "HEAD~1", "--stdout"]);
+
+  expect(await applyPatches("file://" + dirObj.name, "main", "main-with-patch", [patch])).toBe(false);
 });
 
 test("applyPatches invalid patch", async () => {
@@ -104,4 +111,8 @@ index 382ca18..cea7f00 100644
   ];
 
   await expect(applyPatches("file://" + dirObj.name, "main", "main-with-patch", patches)).rejects.toThrow();
+});
+
+test("applyPatches no input patches", async () => {
+  await expect(applyPatches("file://" + dirObj.name, "main", "main-with-patch", [])).rejects.toThrow();
 });

@@ -120,6 +120,14 @@ test("validateConfig invalid privateKeyPath path", () => {
   );
 });
 
+test("validateConfig invalid syncInterval", () => {
+  // @ts-expect-error
+  config.syncInterval = "test";
+  expect(() => validateConfig(config)).toThrowError(
+    'The configuration\'s "syncInterval" must be a number',
+  );
+});
+
 test("validateConfig upstreamMappings not set", () => {
   // @ts-expect-error
   config.upstreamMappings = undefined;
@@ -187,4 +195,10 @@ test("validateConfig upstreamMappings.targetOrg.upstreamOrg.branchMappings dupli
     'The configuration\'s upstreamMappings["targetOrg"]["upstreamOrg"]["branchMappings"] contains duplicate ' +
       "target branches",
   );
+});
+
+test("validateConfig webhookSecret", () => {
+  // @ts-expect-error
+  config.webhookSecret = 123;
+  expect(() => validateConfig(config)).toThrowError('The configuration\'s optional "webhookSecret" must be a string');
 });
