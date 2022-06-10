@@ -60,6 +60,9 @@ const createSQLStatements = [
   `
     CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_prs ON pending_prs (repo_id, upstream_repo_id, branch);
   `,
+  `
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_prs_github ON pending_prs (repo_id, pr_id, github_issue);
+  `,
 ];
 
 /**
@@ -231,16 +234,100 @@ export class Database {
       return null;
     }
 
-    const upstreamPRIDs = (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr));
-
     return {
       repo: repo,
       branch: branch,
       upstreamRepo: upstreamRepo,
-      upstreamPRIDs: upstreamPRIDs,
+      upstreamPRIDs: (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr)),
       action: result.action,
       prID: result.pr_id,
       githubIssue: result.github_issue,
+    };
+  }
+
+  /**
+   * Get a pending pull-request (PR) with the input GitHub issue ID.
+   *
+   * The returned pending PR either represents a PR that could not be created by Magic Mirror (e.g. merge conflict) or
+   * a PR created by Magic Mirror that had its CI failed.
+   * @param {Repo} repo the repo that the GitHub issue belongs to.
+   * @param {number} issueID the GitHub issue ID (technically the "number") to search for.
+   * @return {Promise<PendingPR | null>} a Promise that resolves to the PendingPR object or null if it's not found.
+   */
+  async getPendingPRByIssue(repo: Repo, issueID: number): Promise<PendingPR | null> {
+    const sql = `
+      SELECT upstream_pr_ids, action, branch, pr_id, upstream_repo_id
+      FROM pending_prs
+      WHERE repo_id=? AND github_issue=?
+    `;
+    const result = await this.get(sql, [repo.id, issueID]);
+    if (!result) {
+      return null;
+    }
+
+    const upstreamRepo = await this.getRepoByID(result.upstream_repo_id);
+
+    return {
+      repo: repo,
+      branch: result.branch,
+      // @ts-expect-error since there are foreign key restrictions that prevent upstreamRepo from being null.
+      upstreamRepo: upstreamRepo,
+      upstreamPRIDs: (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr)),
+      action: result.action,
+      prID: result.pr_id,
+      githubIssue: issueID,
+    };
+  }
+
+  /**
+   * Get a pending pull-request (PR) with the input GitHub PR ID.
+   *
+   * The returned pending PR represents a PR that Magic Mirror created. This could optionally have
+   * the githubIssue property set indicating that the PR CI previously failed.
+   * @param {Repo} repo the repo that the GitHub issue belongs to.
+   * @param {number} prID the GitHub PR ID (technically the "number") to search for.
+   * @return {Promise<PendingPR | null>} a Promise that resolves to the PendingPR object or null if it's not found.
+   */
+  async getPendingPRByPRID(repo: Repo, prID: number): Promise<PendingPR | null> {
+    const sql = `
+      SELECT upstream_pr_ids, action, branch, github_issue, upstream_repo_id
+      FROM pending_prs
+      WHERE repo_id=? AND pr_id=?
+    `;
+    const result = await this.get(sql, [repo.id, prID]);
+    if (!result) {
+      return null;
+    }
+
+    const upstreamRepo = await this.getRepoByID(result.upstream_repo_id);
+
+    return {
+      repo: repo,
+      branch: result.branch,
+      // @ts-expect-error since there are foreign key restrictions that prevent upstreamRepo from being null.
+      upstreamRepo: upstreamRepo,
+      upstreamPRIDs: (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr)),
+      action: result.action,
+      prID: prID,
+      githubIssue: result.github_issue,
+    };
+  }
+
+  /**
+   * Get repository by the database id column.
+   * @param {number} repoID the database id column of the repo.
+   * @return {Promise<Repo | null>} a Promise that resolves to the repository or null if it's not found.
+   */
+  async getRepoByID(repoID: number): Promise<Repo | null> {
+    const result = await this.get("SELECT organization, name FROM repos WHERE id=?", [repoID]);
+    if (!result) {
+      return null;
+    }
+
+    return {
+      id: repoID,
+      organization: result.organization,
+      name: result.name,
     };
   }
 

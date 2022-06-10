@@ -1,0 +1,16 @@
+{
+  "action": "closed",
+  "number": 6,
+  "pull_request": {
+    "number": 6,
+    "base": {
+      "ref": "release-2.5"
+    }
+  },
+  "repository": {
+    "name": "config-policy-controller",
+    "owner": {
+      "login": "stolostron"
+    }
+  }
+}

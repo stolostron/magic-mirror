@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import simpleGit, { Response } from "simple-git";
+import simpleGit from "simple-git";
 import tmp from "tmp";
 
 /**
@@ -10,61 +10,51 @@ import tmp from "tmp";
  * @param {string} sourceBranch the branch to use as a base for applying the patches.
  * @param {string} targetBranch the branch to push applied patches to.
  * @param {Array<string>} patches the array of Git patch strings to apply.
- * @return {Promise<void>} a promise that resolves to nothing and rejects when there is a Git error such as a patch
- *   not applying.
+ * @return {Promise<boolean>} a promise that resolves to a boolean determining if the patches actually affected the Git
+ *   history and were pushed. This will be false if the patches are diffs that are already applied on the target branch.
+ *   This rejects when there is a Git error such as a patch not applying.
  */
 export async function applyPatches(
   remoteURL: string,
   sourceBranch: string,
   targetBranch: string,
   patches: Array<string>,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const dirObj = tmp.dirSync({ keep: true, unsafeCleanup: true });
-    const patchFiles: Array<string> = [];
+): Promise<boolean> {
+  if (!patches.length) {
+    throw new Error("One or more patches are required");
+  }
 
-    try {
-      patches.map((patch, i) => {
-        if (patch) {
-          const patchPath = path.join(dirObj.name, `patch${i + 1}.patch`);
-          fs.writeFileSync(patchPath, patches[i]);
-          patchFiles.push(patchPath);
-        }
-      });
-    } catch (err) /* istanbul ignore next */ {
-      dirObj.removeCallback();
-      reject(err);
-      return;
-    }
+  const dirObj = tmp.dirSync({ keep: true, unsafeCleanup: true });
+  try {
+    const patchFiles: Array<string> = [];
+    patches.map((patch, i) => {
+      if (patch) {
+        const patchPath = path.join(dirObj.name, `patch${i + 1}.patch`);
+        fs.writeFileSync(patchPath, patches[i]);
+        patchFiles.push(patchPath);
+      }
+    });
 
     const gitPath = path.join(dirObj.name, "repo");
-    try {
-      fs.mkdirSync(gitPath);
-    } catch (err) /* istanbul ignore next */ {
-      dirObj.removeCallback();
-      reject(err);
-      return;
-    }
-
+    fs.mkdirSync(gitPath);
     // These method calls, when chained together, will run serially. Any failure will cause
-    // the chain to stop and make it jump to the catch callback.
-    let gitCmds: Response<any> = simpleGit(gitPath)
-      .clone(remoteURL, gitPath)
-      .checkoutBranch(targetBranch, `origin/${sourceBranch}`);
+    // the chain to stop.
+    const git = simpleGit(gitPath);
+    await git.clone(remoteURL, gitPath).checkoutBranch(targetBranch, `origin/${sourceBranch}`);
 
-    for (const patchFile of patchFiles) {
-      gitCmds = gitCmds.raw(["am", "-3", patchFile]);
+    const originalHead = await git.revparse(["HEAD"]);
+
+    await Promise.all(patchFiles.map((patchFile) => git.raw(["am", "-3", patchFile])));
+
+    const newHead = await git.revparse(["HEAD"]);
+    if (originalHead === newHead) {
+      return false;
     }
 
-    gitCmds
-      .push(["origin", "HEAD"])
-      .then(() => {
-        dirObj.removeCallback();
-        resolve();
-      })
-      .catch((err) => {
-        dirObj.removeCallback();
-        reject(err);
-      });
-  });
+    await git.push(["origin", "HEAD"]);
+
+    return true;
+  } finally {
+    dirObj.removeCallback();
+  }
 }

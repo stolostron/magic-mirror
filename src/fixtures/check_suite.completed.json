@@ -1,0 +1,36 @@
+{
+  "action": "completed",
+  "check_suite": {
+    "id": 118578147,
+    "status": "completed",
+    "conclusion": "success",
+    "pull_requests": [
+      {
+        "number": 5,
+        "head": {
+          "sha": "ec26c3e57ca3a959ca5aad62de7213c562f8c821"
+        },
+        "base": {
+          "ref": "release-2.5",
+          "sha": "f95f852bd8fca8fcc58a9a2d6c842781e32a215e"
+        }
+      },
+      {
+        "number": 6,
+        "head": {
+          "sha": "db26c3e57ca3a959ca5aad62de7213c562f8c832"
+        },
+        "base": {
+          "ref": "release-2.5",
+          "sha": "e85f852bd8fca8fcc58a9a2d6c842781e32a217a"
+        }
+      }
+    ]
+  },
+  "repository": {
+    "name": "config-policy-controller",
+    "owner": {
+      "login": "stolostron"
+    }
+  }
+}

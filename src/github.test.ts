@@ -58,10 +58,10 @@ test("createFailureIssue with prID", () => {
     body:
       "🪞 Magic Mirror 🪞 failed to sync the following upstream pull-requests because it failed:\n" +
       "* upstream/industries#5\n* upstream/industries#7\n\n" +
+      "The pull-request (#3) can be reviewed for more information.\n\n" +
       "Syncing is paused for the branch main on kramerica/industries until the issue is manually resolved and this " +
       "issue is closed.\n\n" +
-      "![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)\n\n" +
-      "The pull-request (#3) can reviewed for more information.",
+      "![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)",
     owner: "kramerica",
     repo: "industries",
     title: "😿 Failed to sync the upstream PRs: #5, #7",

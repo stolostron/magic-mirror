@@ -4,6 +4,7 @@
         "outDir": "build",
         "module": "commonjs",
         "sourceMap": true,
+        "resolveJsonModule": true,
         "rootDir": "./src"
     },
     "include": [
