@@ -321,6 +321,27 @@ test("Syncer.handleForkedBranch not handled before", async () => {
   await expect(db.getLastHandledPR(repo, upstreamRepo, "release-2.5")).resolves.toEqual(3);
 });
 
+test("Syncer.handleForkedBranch not handled before and no PRs yet in upstream", async () => {
+  syncer.orgs = { stolostron: {} };
+  syncer.getLatestPRID = jest.fn().mockResolvedValue(null);
+
+  await expect(
+    syncer.handleForkedBranch(
+      "stolostron",
+      "open-cluster-management-io",
+      "config-policy-controller",
+      "release-2.5",
+      "main",
+    ),
+  ).resolves.not.toThrowError();
+
+  const db = syncer.db as Database;
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+
+  await expect(db.getLastHandledPR(repo, upstreamRepo, "release-2.5")).resolves.toEqual(0);
+});
+
 test("Syncer.handleForkedBranch no new PRs", async () => {
   syncer.orgs = { stolostron: {} };
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([]);
