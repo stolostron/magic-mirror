@@ -156,8 +156,8 @@ export class Database {
   /**
    * Find the database path.
    *
-   * This prioritizes dbPath set in the configuration followed by an existing ./magic-mirror.db file and an existing
-   * production database set in DEFAULTDB_PATH.
+   * This prioritizes dbPath set in the configuration followed by an existing ./magic-mirror.db file and a production
+   * database set in DEFAULTDB_PATH.
    * @param {object} config the configuration object with dbPath optionally set.
    * @return {string} the database path to use when instantiating the Database class.
    */

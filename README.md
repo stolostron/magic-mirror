@@ -40,6 +40,8 @@ The GitHub app requires being subscribed to the following events:
 
 ## Configuration
 
+The configuration file must be present at `./config.json` or `/etc/magic-mirror/config.json`.
+
 - `appID` - the GitHub App ID that is used during authentication with the GitHub API.
 - `dbPath` - an optional path to the SQLite database to use or create. This defaults to
   `/etc/magic-mirror/magic-mirror.db`.
@@ -77,4 +79,57 @@ installation.
   },
   "webhookSecret": "my-secret"
 }
+```
+
+## Deployment
+
+### Architecture
+
+<img src="images/architecture.png" alt="architecture diagram" width="400px" />
+
+### Prerequisites
+
+- [Create](https://docs.github.com/en/developers/apps/building-github-apps/creating-a-github-app) a GitHub App in the
+  GitHub organization with the forks.
+  - Set the webhook URL to the root of where you plan to deploy Magic Mirror.
+  - Set the documented [permissions](#permissions) and webhook [events](#events).
+  - Set a webhook secret.
+- Create a `config.json` file based on the [documentation](#configuration).
+- [Download](https://docs.github.com/en/developers/apps/building-github-apps/authenticating-with-github-apps#generating-a-private-key)
+  a generated private key of your GitHub App and name it `auth.key`.
+
+### Kubernetes
+
+After completing the [prerequisites](#prerequisites), start by creating a namespace to deploy Magic Mirror in.
+
+```shell
+kubectl create namespace magic-mirror
+```
+
+Create the Kubernetes secret to contain the `config.json` and `auth.key` files setup during the
+[prerequisite](#prerequisites) steps.
+
+```shell
+kubectl create -n magic-mirror secret generic magic-mirror-config --from-file=config.json --from-file=auth.key
+```
+
+Then fill out a `values.yaml` file to customize the [Helm chart's](helm/) default [values.yaml](helm/values.yaml) file.
+Below is an example that utilizes [OpenShift's](https://www.redhat.com/en/technologies/cloud-computing/openshift)
+default certificate for TLS termination.
+
+```yaml
+ingress:
+  # Change this to the actual external DNS name that GitHub will use to send webhook events.
+  host: magic-mirror.apps.openshift.example.com
+  annotations:
+    route.openshift.io/termination: edge
+
+configSecret: magic-mirror-config
+```
+
+Once you are happy with your `values.yaml` file, you may install Magic Mirror using the following Helm command from the
+root of the Git repository.
+
+```shell
+helm install magic-mirror ./helm -f values.yaml --namespace=magic-mirror
 ```

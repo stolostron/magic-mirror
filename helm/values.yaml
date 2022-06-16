@@ -1,0 +1,76 @@
+# Default values for magic-mirror.
+image:
+  repository: quay.io/stolostron/magic-mirror
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext:
+  runAsNonRoot: true
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+    # route.openshift.io/termination: edge
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+persistentVolume:
+  # If true, create/use a Persistent Volume Claim for the SQLite database. If false, use emptyDir.
+  enabled: true
+
+  # magic-mirror Persistent Volume access modes that must match those of the existing PV or dynamic provisioner.
+  # See: http://kubernetes.io/docs/user-guide/persistent-volumes/
+  accessModes:
+    - ReadWriteOnce
+
+  # The optional magic-mirror Persistent Volume Claim annotations.
+  annotations: {}
+
+  # The optional magic-mirror Persistent Volume existing claim name.
+  # This requires persistentVolume.enabled to be set to true.
+  # If defined, the PVC must be created manually before the volume will be bound.
+  existingClaim: ""
+
+  # The magic-mirror Persistent Volume size for the database.
+  size: 20Mi
+
+  # An optional Persistent Volume Claim Selector.
+  # This is useful if a Persistent Volume has been provisioned in advance.
+  # Ref: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#selector
+  selector: {}
+
+emptyDir:
+  # The emptyDir volume size limit. This is used for /tmp and if persistentVolume.enabled is false, it's also used
+  # for the database, making it ephemeral.
+  #
+  sizeLimit: ""

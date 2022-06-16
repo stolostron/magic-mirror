@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "magic-mirror.fullname" . }}
+  labels:
+    {{- include "magic-mirror.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "magic-mirror.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "magic-mirror.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-syncer
+          command:
+            - npm
+          args:
+            - run
+            - syncer
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: auth
+              mountPath: /etc/magic-mirror/auth.key
+              subPath: auth.key
+              readOnly: true
+            - name: config
+              mountPath: /etc/magic-mirror/config.json
+              subPath: config.json
+              readOnly: true
+            - name: database
+              mountPath: /etc/magic-mirror
+        - name: {{ .Chart.Name }}-web
+          command:
+            - npm
+          args:
+            - run
+            - web
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: auth
+              mountPath: /etc/magic-mirror/auth.key
+              subPath: auth.key
+              readOnly: true
+            - name: config
+              mountPath: /etc/magic-mirror/config.json
+              subPath: config.json
+              readOnly: true
+            - name: database
+              mountPath: /etc/magic-mirror
+      volumes:
+        - name: auth
+          secret:
+            secretName: {{ required "A valid .Values.configSecret entry is required" .Values.configSecret }}
+            items:
+              - key: auth.key
+                path: auth.key
+        - name: config
+          secret:
+            secretName: {{ required "A valid .Values.configSecret entry is required" .Values.configSecret }}
+            items:
+              - key: config.json
+                path: config.json
+        - name: database
+        {{- if .Values.persistentVolume.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ if .Values.persistentVolume.existingClaim }}{{ .Values.persistentVolume.existingClaim }}{{- else }}{{ template "magic-mirror.fullname" . }}{{ "-db" }}{{- end }}
+        {{- else }}
+          emptyDir:
+          {{- if .Values.emptyDir.sizeLimit }}
+            sizeLimit: {{ .Values.emptyDir.sizeLimit }}
+          {{- else }}
+            {}
+          {{- end -}}
+        {{- end }}
+        - name: tmp
+          emptyDir:
+          {{- if .Values.emptyDir.sizeLimit }}
+            sizeLimit: {{ .Values.emptyDir.sizeLimit }}
+          {{- else }}
+            {}
+          {{- end -}}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

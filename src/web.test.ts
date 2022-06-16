@@ -1,13 +1,14 @@
 import fs from "fs";
 import path from "path";
 
-import { Probot, ProbotOctokit } from "probot";
+import { ApplicationFunctionOptions, Probot, ProbotOctokit } from "probot";
 import nock from "nock";
+import request from "supertest";
 import tmp from "tmp";
 
 import { Config } from "./config";
 import { Database, PRAction } from "./db";
-import { app } from "./web";
+import { app, getProbotServer } from "./web";
 import checkSuiteCompleted from "./fixtures/check_suite.completed.json";
 import issueClosed from "./fixtures/issues.closed.json";
 import prClosed from "./fixtures/pull_request.closed.json";
@@ -20,6 +21,8 @@ let probot: Probot;
 
 beforeEach(async () => {
   nock.disableNetConnect();
+  // Allow localhost connections to test custom Probot routes.
+  nock.enableNetConnect("127.0.0.1");
 
   dirObj = tmp.dirSync({ keep: true, unsafeCleanup: true });
   db = new Database(path.join(dirObj.name, "magic-mirror.db"));
@@ -50,7 +53,7 @@ beforeEach(async () => {
       throttle: { enabled: false },
     }),
   });
-  probot.load((p: Probot) => app(p, config, db));
+  probot.load((p: Probot, options: ApplicationFunctionOptions) => app(p, options, config, db));
 });
 
 afterEach(() => {
@@ -287,4 +290,9 @@ test("pull_request.closed pending PR", async () => {
 
   expect(await db.getPendingPR(repo, upstreamRepo, "release-2.5")).toBe(null);
   expect(await db.getLastHandledPR(repo, upstreamRepo, "release-2.5")).toEqual(3);
+});
+
+test("/status", async () => {
+  const server = await getProbotServer(config, db);
+  await request(server.expressApp).get("/status").expect("Content-Type", "text/plain; charset=utf-8").expect(200, "OK");
 });
