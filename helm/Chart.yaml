@@ -1,0 +1,6 @@
+apiVersion: v2
+name: magic-mirror
+description: A Helm chart to deploy Magic Mirror
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

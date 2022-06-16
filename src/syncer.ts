@@ -300,7 +300,7 @@ export class Syncer {
     branch: string,
     upstreamBranch: string,
   ) {
-    this.logger.info(`Handling the branch "${branch}" on ${org}/${repoName}"`);
+    this.logger.info(`Handling the branch "${branch}" on ${org}/${repoName}`);
 
     const repo = (await this.db?.getOrCreateRepo(org, repoName)) as Repo;
     const upstreamRepo = (await this.db?.getOrCreateRepo(upstreamOrg, repoName)) as Repo;

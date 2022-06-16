@@ -1,0 +1,27 @@
+{{- if .Values.persistentVolume.enabled -}}
+{{- if not .Values.persistentVolume.existingClaim -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  {{- if .Values.persistentVolume.annotations }}
+  annotations:
+{{ toYaml .Values.persistentVolume.annotations | indent 4 }}
+  {{- end }}
+  labels:
+    {{- include "magic-mirror.labels" . | nindent 4 }}
+  name: {{ template "magic-mirror.fullname" . }}-db
+spec:
+  accessModes:
+{{ toYaml .Values.persistentVolume.accessModes | indent 4 }}
+{{- if .Values.persistentVolume.storageClass }}
+  storageClassName: ""
+{{- end }}
+  resources:
+    requests:
+      storage: "{{ .Values.persistentVolume.size }}"
+{{- if .Values.persistentVolume.selector }}
+  selector:
+  {{- toYaml .Values.persistentVolume.selector | nindent 4 }}
+{{- end -}}
+{{- end -}}
+{{- end -}}

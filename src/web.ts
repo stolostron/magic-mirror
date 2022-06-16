@@ -1,4 +1,4 @@
-import { Probot, Server } from "probot";
+import { ApplicationFunctionOptions, Probot, Server } from "probot";
 
 import { Config, loadConfig } from "./config";
 import { Database, PRAction } from "./db";
@@ -8,11 +8,21 @@ import { newLogger } from "./log";
 /**
  * Add the handlers to Probot app.
  * @param {Probot} probot the Probot app to configure.
+ * @param {ApplicationFunctionOptions} probotOptions the Probot options that give access to the getRouter method.
  * @param {Config} config the Magic Mirror configuration.
  * @param {Database} db the Magic Mirror database.
  */
-export async function app(probot: Probot, config: Config, db: Database) {
+export async function app(probot: Probot, probotOptions: ApplicationFunctionOptions, config: Config, db: Database) {
   const logger = newLogger(config.logLevel);
+
+  // Add a status endpoint for liveness probes
+  if (probotOptions.getRouter) {
+    const router = probotOptions.getRouter();
+    router.get("/status", (_, res) => {
+      res.contentType("text/plain; charset=utf-8");
+      res.send("OK");
+    });
+  }
 
   /**
    * Handle a closed GitHub issue.
@@ -182,14 +192,12 @@ export async function app(probot: Probot, config: Config, db: Database) {
 }
 
 /**
- * Run the Magic Mirror GitHub webhook receiver.
+ * Get the configured Probot Server instance.
+ * @param {Config} config the configuration object to configure Probot with.
+ * @param {Database} db the Database object to use in the Probot event handlers.
+ * @return {Promise<Server>} a Promise that resolves to a configured Probot Server instance.
  */
-export async function run() {
-  const config = loadConfig();
-  const dbPath = Database.getDbPath(config);
-  const db = new Database(dbPath);
-  await db.init();
-
+export async function getProbotServer(config: Config, db: Database): Promise<Server> {
   const server = new Server({
     Probot: Probot.defaults({
       appId: config.appID,
@@ -197,6 +205,23 @@ export async function run() {
       secret: config.webhookSecret,
     }),
   });
-  await server.load((probot: Probot) => app(probot, config, db));
+  await server.load((probot: Probot, probotOptions: ApplicationFunctionOptions) =>
+    app(probot, probotOptions, config, db),
+  );
+
+  return server;
+}
+
+/**
+ * Run the Magic Mirror GitHub webhook receiver.
+ */
+export async function run() {
+  const config = loadConfig();
+
+  const dbPath = Database.getDbPath(config);
+  const db = new Database(dbPath);
+  await db.init();
+
+  const server = await getProbotServer(config, db);
   await server.start();
 }

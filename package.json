@@ -1,11 +1,11 @@
 {
   "name": "magic-mirror",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "GitHub App that syncs upstream repositories with forks using PRs",
   "scripts": {
     "build": "npx tsc",
     "lint": "eslint src --ext .ts",
-    "run": "npm run build && concurrently npm:syncer npm:web -n syncer,web -c green,blue",
+    "dev": "npm run build && touch magic-mirror.db && concurrently npm:syncer npm:web -n syncer,web -c green,blue",
     "syncer": "node ./build/scripts/start-syncer.js",
     "web": "node ./build/scripts/start-web.js",
     "test": "jest --runInBand ./src"
@@ -27,6 +27,7 @@
     "@tsconfig/node16": "^1.0.2",
     "@types/jest": "^27.1.5",
     "@types/sqlite3": "^3.1.8",
+    "@types/supertest": "^2.0.12",
     "@types/tmp": "^0.2.3",
     "@typescript-eslint/eslint-plugin": "^5.27.0",
     "@typescript-eslint/parser": "^5.27.0",
@@ -34,6 +35,7 @@
     "eslint": "^8.16.0",
     "eslint-config-google": "^0.14.0",
     "nock": "^13.2.6",
+    "supertest": "^6.2.3",
     "ts-jest": "^27.1.5",
     "typescript": "^4.6.4"
   },
