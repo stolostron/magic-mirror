@@ -170,6 +170,40 @@ test("check_suite.completed", async () => {
   expect((await db.getPendingPR(repo, upstreamRepo, "release-2.5"))?.action).toEqual(PRAction.Created);
 });
 
+test("check_suite.completed failed to merge PR", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .put("/repos/stolostron/config-policy-controller/pulls/6/merge")
+    .reply(400)
+    .post("/repos/stolostron/config-policy-controller/issues", (body: any) => {
+      const issueContent = body.body as string;
+      expect(issueContent.includes("the pull-request (#6) couldn't be merged")).toBe(true);
+      return true;
+    })
+    .reply(200, { number: 7 });
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_suite", payload: checkSuiteCompleted });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+  // Verify that the pending PR is blocked and an issue was created after the failure
+  const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
+  expect(pendingPR?.action).toEqual(PRAction.Blocked);
+  expect(pendingPR?.githubIssue).toEqual(7);
+});
+
 test("check_suite.completed blocked pending PR", async () => {
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
   const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
@@ -211,7 +245,6 @@ test("check_suite.completed failure", async () => {
 
   const mock = nock("https://api.github.com")
     .post("/repos/stolostron/config-policy-controller/issues", (body: any) => {
-      // Verify that the PR was merged
       const issueContent = body.body as string;
       expect(issueContent.includes("The pull-request (#6) can be reviewed for more information.")).toBe(true);
       expect(issueContent.includes('because the PR check suite concluded with "failure"')).toBe(true);
