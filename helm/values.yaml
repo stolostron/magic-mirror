@@ -11,10 +11,13 @@ fullnameOverride: ""
 
 podAnnotations: {}
 
-podSecurityContext: {}
-
-securityContext:
+podSecurityContext:
+  fsGroup: 1000
   runAsNonRoot: true
+  runAsGroup: 1000
+  runAsUser: 1000
+
+securityContext: {}
 
 service:
   type: ClusterIP
