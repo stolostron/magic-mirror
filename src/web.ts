@@ -111,13 +111,38 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
 
       if (check.conclusion === "success") {
         logger.debug(`Merging the PR #${pr.number} on ${organization}/${repoName} for the branch ${pr.base.ref}`);
-        await context.octokit.pulls.merge({
-          owner: organization,
-          repo: repoName,
-          pull_number: pr.number,
-          merge_method: "rebase",
-          sha: pr.head.sha,
-        });
+        try {
+          await context.octokit.pulls.merge({
+            owner: organization,
+            repo: repoName,
+            pull_number: pr.number,
+            merge_method: "rebase",
+            sha: pr.head.sha,
+          });
+        } catch (err) {
+          const issueID = await createFailureIssue(
+            context.octokit,
+            organization,
+            repoName,
+            pendingPR.upstreamRepo.organization,
+            pendingPR.branch,
+            pendingPR.upstreamPRIDs,
+            `the pull-request (#${pr.number}) couldn't be merged: ${err}`,
+            pr.number,
+          );
+
+          logger.info(
+            `Created the GitHub issue #${issueID} on ${organization}/${repoName} to notify of the failure to ` +
+              `merge the PR (#${pr.number}): ${err}`,
+          );
+
+          pendingPR.githubIssue = issueID;
+          pendingPR.action = PRAction.Blocked;
+          await db.setPendingPR(pendingPR);
+
+          return;
+        }
+
         logger.info(`Merged the PR #${pr.number} on ${organization}/${repoName} for the branch ${pr.base.ref}`);
         return;
       }
