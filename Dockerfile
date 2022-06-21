@@ -29,3 +29,5 @@ COPY package.json package-lock.json ./
 RUN npm install
 
 COPY --from=build /opt/magic-mirror/build ./build
+
+USER 1000
