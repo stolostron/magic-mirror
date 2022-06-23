@@ -9,7 +9,7 @@ on:
 
 defaults:
   run:
-    working-directory: ${{ github.repository }}
+    working-directory: stolostron/magic-mirror
 
 jobs:
   publish:
@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-          path: ${{ github.repository }}
+          path: stolostron/magic-mirror
       - name: publish image
         run: |
           IMAGE_TAG="latest"
@@ -33,8 +33,6 @@ jobs:
       - name: publish release
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v0.1.14
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         with:
           body:
             "# magic-mirror ${{ github.ref_name }}\n- See the [CHANGELOG](https://github.com/${{
