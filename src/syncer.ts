@@ -4,7 +4,7 @@ import winston from "winston";
 
 import { Config } from "./config";
 import { Database, PRAction, Repo } from "./db";
-import { applyPatches } from "./git";
+import { applyPatches, patchLocation } from "./git";
 import { createFailureIssue } from "./github";
 import { newLogger } from "./log";
 
@@ -160,28 +160,24 @@ export class Syncer {
   }
 
   /**
-   * Get the Git diffs of the input pull-requests (PRs).
+   * Get the PR patch locations for input in the applyPatches function.
    * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization where the PR is located.
    * @param {string} repo the GitHub repository where the PR is located.
-   * @param {Array<number>} prs the PR IDs to get the Git diffs for.
-   * @return {Promise<object>} a Promise that resolves to an object where the keys are PR IDs and the values are the
-   *   respective Git diffs.
+   * @param {Array<number>} prIDs the PR IDs to get the patch locations from.
+   * @return {Promise<Array<patchLocation>>} a Promise that resolves to an array of patchLocation objects.
    */
-  private async getPRDiffs(
+  private async getPRPatchLocations(
     client: Octokit,
     org: string,
     repo: string,
-    prs: Array<number>,
-  ): Promise<{ [key: number]: string }> {
-    const rv: { [key: number]: string } = {};
+    prIDs: Array<number>,
+  ): Promise<Array<patchLocation>> {
+    const rv: Array<patchLocation> = [];
 
-    const prDiffs = await Promise.all(
-      prs.map((pr) => client.pulls.get({ owner: org, mediaType: { format: "patch" }, pull_number: pr, repo: repo })),
-    );
-    prDiffs.forEach((prDiff, i) => {
-      // @ts-ignore because the return type of client.pulls.get doesn't account for the patch format.
-      rv[prs[i]] = prDiff.data;
+    const prs = await Promise.all(prIDs.map((prID) => client.pulls.get({ owner: org, pull_number: prID, repo: repo })));
+    prs.forEach((pr, i) => {
+      rv.push({ head: pr.data.merge_commit_sha as string, numCommits: pr.data.commits });
     });
 
     return rv;
@@ -381,13 +377,13 @@ export class Syncer {
         `${upstreamOrg}/${repoName}: ${prIDs.join(", ")}`,
     );
 
-    const diffs = await this.getPRDiffs(client, upstreamOrg, repoName, prIDs);
+    const patchLocations = await this.getPRPatchLocations(client, upstreamOrg, repoName, prIDs);
     const token = await this.getToken(org);
     const gitRemote = `https://x-access-token:${token}@github.com/${org}/${repoName}.git`;
+    const upstreamGitRemote = `https://github.com/${upstreamOrg}/${repoName}.git`;
 
-    let patchesChangedRepo: boolean;
     try {
-      patchesChangedRepo = await applyPatches(gitRemote, branch, targetBranch, Object.values(diffs));
+      await applyPatches(gitRemote, upstreamGitRemote, branch, targetBranch, patchLocations);
     } catch (err) {
       this.logger.error(
         `Failed to apply the patches on the "${branch}" branch on ${org}/${repoName} from the following PRs from ` +
@@ -420,17 +416,8 @@ export class Syncer {
     }
 
     const prPrefix = `\n* ${upstreamOrg}/${repoName}#`;
-
-    if (!patchesChangedRepo) {
-      this.logger.info(
-        `Skipping the following PRs from ${upstreamOrg}/${repo.name} on the ${repo.organization}/${repo.name} ` +
-          `${branch} branch because it did not change the Git history:${prPrefix}${prIDs.join(prPrefix)}`,
-      );
-      await this.db?.setLastHandledPR(repo, upstreamRepo, branch, prIDs[prIDs.length - 1]);
-      return;
-    }
-
     let prBody = `Syncing the following PRs:${prPrefix}${prIDs.join(prPrefix)}`;
+
     if (closedPreviousPR) {
       prBody += `\n\nThis replaces #${closedPreviousPR}.`;
     }

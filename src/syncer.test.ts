@@ -160,29 +160,29 @@ test("Syncer.getGitHubClient", () => {
   expect(client).not.toBeNull();
 });
 
-test("Syncer.getPRDiffs", async () => {
+test("Syncer.getPRPatchLocations", async () => {
   const mockClient = jest.fn();
   mockClient.pulls = jest.fn();
   mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
-        data: "some diff",
+        data: { merge_commit_sha: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", commits: 2 },
       }),
     ),
   );
   mockClient.pulls.get.mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
-        data: "some other diff",
+        data: { merge_commit_sha: "b6d3319c0383b929bb05da90add55a07f3f75660", commits: 1 },
       }),
     ),
   );
 
   const syncer = new Syncer(config);
-  await expect(syncer.getPRDiffs(mockClient, "org", "repo", [3, 5])).resolves.toEqual({
-    "3": "some diff",
-    "5": "some other diff",
-  });
+  await expect(syncer.getPRPatchLocations(mockClient, "org", "repo", [3, 5])).resolves.toEqual([
+    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 },
+    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1 },
+  ]);
 });
 
 test("Syncer.getBranchToPRIDs", async () => {
@@ -462,7 +462,10 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
   syncer.closePR = jest.fn().mockResolvedValue(true);
-  syncer.getPRDiffs = jest.fn().mockResolvedValue({ 4: "some diff", 5: "some other diff" });
+  syncer.getPRPatchLocations = jest.fn().mockResolvedValue([
+    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 },
+    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1 },
+  ]);
   syncer.getToken = jest.fn().mockResolvedValue("secret token");
 
   const db = syncer.db as Database;
@@ -499,7 +502,9 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
   syncer.orgs = { stolostron: {} };
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4] });
-  syncer.getPRDiffs = jest.fn().mockResolvedValue({ 4: "some diff" });
+  syncer.getPRPatchLocations = jest
+    .fn()
+    .mockResolvedValue([{ head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 }]);
   syncer.getToken = jest.fn().mockResolvedValue("secret token");
   (applyPatches as jest.Mock).mockImplementation(
     () =>
@@ -525,38 +530,6 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toBeNull();
   expect(pendingPR?.githubIssue).toEqual(8);
-});
-
-test("Syncer.handleForkedBranch patch causes no change in Git history", async () => {
-  syncer.orgs = { stolostron: {} };
-  syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4]);
-  syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4] });
-  syncer.getPRDiffs = jest.fn().mockResolvedValue({ 4: "some diff" });
-  syncer.getToken = jest.fn().mockResolvedValue("secret token");
-  (applyPatches as jest.Mock).mockImplementation(
-    () =>
-      new Promise<bool>((resolve) => {
-        resolve(false);
-      }),
-  );
-
-  const db = syncer.db as Database;
-  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
-  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
-  // Verify that the last handled PR is the upstream PR that didn't change the Git history.
-  await db.setLastHandledPR(repo, upstreamRepo, "release-2.5", 3);
-
-  await expect(
-    syncer.handleForkedBranch(
-      "stolostron",
-      "open-cluster-management-io",
-      "config-policy-controller",
-      "release-2.5",
-      "main",
-    ),
-  ).resolves.not.toThrowError();
-  expect(await db.getPendingPR(repo, upstreamRepo, "release-2.5")).toBeNull();
-  expect(await db.getLastHandledPR(repo, upstreamRepo, "release-2.5")).toEqual(4);
 });
 
 test("Syncer.init", async () => {
