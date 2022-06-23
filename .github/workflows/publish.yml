@@ -27,7 +27,7 @@ jobs:
           if [[ "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
             IMAGE_TAG="${{ github.ref_name }}"
           fi
-          docker build -t quay.io/${{ github.repository }}:${IMAGE_TAG} -f Dockerfile
+          docker build -t quay.io/${{ github.repository }}:${IMAGE_TAG} -f Dockerfile .
           echo ${{ secrets.DOCKER_PASSWORD }} | docker login quay.io --username ${{ secrets.DOCKER_USER }} --password-stdin
           docker push quay.io/${{ github.repository }}:${IMAGE_TAG}
       - name: publish release
