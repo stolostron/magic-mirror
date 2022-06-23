@@ -1,0 +1,43 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
+defaults:
+  run:
+    working-directory: ${{ github.repository }}
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          path: ${{ github.repository }}
+      - name: publish image
+        run: |
+          IMAGE_TAG="latest"
+          if [[ "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
+            IMAGE_TAG="${{ github.ref_name }}"
+          fi
+          docker build -t quay.io/${{ github.repository }}:${IMAGE_TAG} -f Dockerfile
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login quay.io --username ${{ secrets.DOCKER_USER }} --password-stdin
+          docker push quay.io/${{ github.repository }}:${IMAGE_TAG}
+      - name: publish release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v0.1.14
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          body:
+            "# magic-mirror ${{ github.ref_name }}\n- See the [CHANGELOG](https://github.com/${{
+            github.repository }}/blob/main/CHANGELOG/CHANGELOG-${{ github.ref_name }}.md) for more
+            details.\n- The released image is quay.io/${{ github.repository }}:${{ github.ref_name
+            }}"
