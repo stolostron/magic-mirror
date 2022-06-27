@@ -1,0 +1,11 @@
+{
+  "sha": "db26c3e57ca3a959ca5aad62de7213c562f8c832",
+  "context": "dco",
+  "state": "success",
+  "repository": {
+    "name": "config-policy-controller",
+    "owner": {
+      "login": "stolostron"
+    }
+  }
+}

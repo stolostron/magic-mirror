@@ -14,12 +14,36 @@ closing the GitHub issue signals to Magic Mirror that the failed sync was manual
 Installing Magic Mirror on a particular GitHub repository indicates that it should be synced with upstream. Additional
 configuration as described in the [Configuration](#configuration) section is still required.
 
+## GitHub Repository Configuration
+
+### Upstream Repositories
+
+The upstream repository must use the "rebase" merge method on all pull-requests (PRs) or require that all PRs only
+contain a single commit. The reason is that Magic Mirror is unable to detect which merge method was used on the upstream
+PR.
+
+### Forked Repositories
+
+Forked repositories must have the following configured:
+
+- [Required status checks before merging](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/defining-the-mergeability-of-pull-requests/about-protected-branches#require-status-checks-before-merging)
+  if you'd like for CI to pass before the cherry-pick PR is merged.
+- [Rebase merges](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/about-merge-methods-on-github#rebasing-and-merging-your-commits)
+  are enabled.
+- Merges must not require an
+  [approval](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/defining-the-mergeability-of-pull-requests/about-protected-branches#require-pull-request-reviews-before-merging).
+- It's also recommended to enable
+  [automatic deletion of branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-the-automatic-deletion-of-branches)
+  since Magic Mirror works by creating temporary branches on the forked repository.
+
 ### Permissions
 
 The GitHub App requires the following repository permissions:
 
 - [Checks](https://docs.github.com/en/rest/overview/permissions-required-for-github-apps#permission-on-checks) read
   access. This is needed to verify that the CI on a PR has passed.
+- [Commit statuses](https://docs.github.com/en/rest/overview/permissions-required-for-github-apps#permission-on-statuses)
+  read access. This is needed to verify that the CI on a PR has passed.
 - [Contents](https://docs.github.com/en/rest/overview/permissions-required-for-github-apps#permission-on-contents) read
   and write access. This is needed so that repository can be cloned and a branch created with the cherry picked upstream
   commits.
@@ -34,9 +58,10 @@ The GitHub App requires the following repository permissions:
 
 The GitHub app requires being subscribed to the following events:
 
-- [Check suite](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#check_suite)
+- [Check run](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#check_suite)
 - [Issues](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#issues)
 - [Pull request](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request)
+- [Status](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#status)
 
 ## Configuration
 

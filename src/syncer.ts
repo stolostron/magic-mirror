@@ -3,9 +3,9 @@ import { createAppAuth } from "@octokit/auth-app";
 import winston from "winston";
 
 import { Config } from "./config";
-import { Database, PRAction, Repo } from "./db";
+import { Database, PendingPR, PRAction, Repo } from "./db";
 import { applyPatches, patchLocation } from "./git";
-import { createFailureIssue } from "./github";
+import { createFailureIssue, getRequiredChecks, mergePR } from "./github";
 import { newLogger } from "./log";
 
 /**
@@ -443,6 +443,19 @@ export class Syncer {
       prID: newPR.data.number,
       githubIssue: null,
     });
+
+    const requiredChecks = await getRequiredChecks(client, org, repoName, branch);
+    if (requiredChecks.size === 0) {
+      this.logger.info(`No checks are required for the PR ${newPR.data.html_url}. Will merge now.`);
+
+      const merged = await mergePR(client, this.db as Database, pendingPR as PendingPR, newPR.data.head.sha);
+      if (!merged) {
+        this.logger.info(
+          `Created a GitHub issue #${pendingPR?.githubIssue} on ${org}/${repoName} to notify of the failure to merge ` +
+            ` the PR (#${newPR.data.number})`,
+        );
+      }
+    }
   }
 
   /**
