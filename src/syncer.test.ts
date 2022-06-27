@@ -4,6 +4,7 @@ import path from "path";
 import tmp from "tmp";
 
 import { Database, PendingPR, PRAction } from "./db";
+import { getRequiredChecks, mergePR } from "./github";
 import { applyPatches } from "./git";
 
 // This must be before importing from syncer.ts for the mock to take effect
@@ -23,6 +24,8 @@ jest.mock("./github", () => ({
       resolve(8);
     });
   },
+  getRequiredChecks: jest.fn(async () => new Set<string>(["dco"])),
+  mergePR: jest.fn(async () => true),
 }));
 
 import { Config, Syncer } from "./syncer";
@@ -33,12 +36,8 @@ let syncer: Syncer;
 
 beforeEach(async () => {
   jest.restoreAllMocks();
-  (applyPatches as jest.Mock).mockImplementation(
-    () =>
-      new Promise<boolean>((resolve) => {
-        resolve(true);
-      }),
-  );
+  (applyPatches as jest.Mock).mockImplementation(async () => true);
+  (getRequiredChecks as jest.Mock).mockImplementation(async () => new Set<string>(["dco"]));
 
   config = {
     appID: 2,
@@ -454,7 +453,6 @@ test("Syncer.handleForkedBranch close existing PR but already closed", async () 
 });
 
 test("Syncer.handleForkedBranch close existing PR and open new PR", async () => {
-  syncer.orgs = { stolostron: {} };
   syncer.orgs = { stolostron: { client: jest.fn() } };
   syncer.orgs.stolostron.client = jest.fn();
   syncer.orgs.stolostron.client.pulls = jest.fn();
@@ -496,6 +494,41 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toEqual(8);
   expect(pendingPR?.upstreamPRIDs).toEqual([4, 5]);
+});
+
+test("Syncer.handleForkedBranch merge PR right away", async () => {
+  (getRequiredChecks as jest.Mock).mockImplementation(async () => new Set<string>());
+
+  syncer.orgs = { stolostron: { client: jest.fn() } };
+  syncer.orgs.stolostron.client = jest.fn();
+  syncer.orgs.stolostron.client.pulls = jest.fn();
+  syncer.orgs.stolostron.client.pulls.create = jest
+    .fn()
+    .mockReturnValue({ data: { head: { sha: "dfg3319c0383b929bb05da90add55a07f3f756677" }, number: 8 } });
+  syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
+  syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
+  syncer.closePR = jest.fn().mockResolvedValue(true);
+  syncer.getPRPatchLocations = jest.fn().mockResolvedValue([
+    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 },
+    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1 },
+  ]);
+  syncer.getToken = jest.fn().mockResolvedValue("secret token");
+
+  const db = syncer.db as Database;
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setLastHandledPR(repo, upstreamRepo, "release-2.5", 3);
+
+  await expect(
+    syncer.handleForkedBranch(
+      "stolostron",
+      "open-cluster-management-io",
+      "config-policy-controller",
+      "release-2.5",
+      "main",
+    ),
+  ).resolves.not.toThrowError();
+  expect((mergePR as jest.Mock).mock.calls.length).toBe(1);
 });
 
 test("Syncer.handleForkedBranch merge conflict on patch", async () => {

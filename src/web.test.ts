@@ -9,9 +9,10 @@ import tmp from "tmp";
 import { Config } from "./config";
 import { Database, PRAction } from "./db";
 import { app, getProbotServer } from "./web";
-import checkSuiteCompleted from "./fixtures/check_suite.completed.json";
+import checkRunCompleted from "./fixtures/check_run.completed.json";
 import issueClosed from "./fixtures/issues.closed.json";
 import prClosed from "./fixtures/pull_request.closed.json";
+import status from "./fixtures/status.json";
 
 let config: Config;
 let db: Database;
@@ -131,22 +132,34 @@ test("issues.closed pending PR with issue and PR ID", async () => {
   expect(await db.getPendingPR(repo, upstreamRepo, "release-2.5")).toBeNull();
 });
 
-test("check_suite.completed irrelevant PR", async () => {
+test("check_run.completed no PR", async () => {
+  const mock = nock("https://api.github.com");
+
+  const checkRunNoPR = JSON.parse(JSON.stringify(checkRunCompleted));
+  checkRunNoPR.check_run.pull_requests = [];
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunNoPR });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+});
+
+test("check_run.completed irrelevant PR", async () => {
   const mock = nock("https://api.github.com");
 
   // @ts-expect-error since the event JSON is incomplete
-  await probot.receive({ name: "check_suite", payload: checkSuiteCompleted });
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
 
   expect(mock.pendingMocks()).toStrictEqual([]);
 });
 
-test("check_suite.completed", async () => {
+test("check_run.completed blocked PR", async () => {
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
   const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
   await db.setPendingPR({
-    action: PRAction.Created,
+    action: PRAction.Blocked,
     branch: "release-2.5",
-    githubIssue: null,
+    githubIssue: 7,
     prID: 6,
     repo,
     upstreamRepo,
@@ -154,23 +167,15 @@ test("check_suite.completed", async () => {
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
-  const mock = nock("https://api.github.com")
-    .put("/repos/stolostron/config-policy-controller/pulls/6/merge", (body: any) => {
-      // Verify that the PR was merged
-      expect(body).toMatchObject({ merge_method: "rebase", sha: "db26c3e57ca3a959ca5aad62de7213c562f8c832" });
-      return true;
-    })
-    .reply(200);
+  const mock = nock("https://api.github.com");
 
   // @ts-expect-error since the event JSON is incomplete
-  await probot.receive({ name: "check_suite", payload: checkSuiteCompleted });
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
 
   expect(mock.pendingMocks()).toStrictEqual([]);
-  // Verify that the pending PR wasn't modified. That is the responsibility of a different handler.
-  expect((await db.getPendingPR(repo, upstreamRepo, "release-2.5"))?.action).toEqual(PRAction.Created);
 });
 
-test("check_suite.completed failed to merge PR", async () => {
+test("check_run.completed irrelevant check run", async () => {
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
   const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
   await db.setPendingPR({
@@ -185,6 +190,188 @@ test("check_suite.completed failed to merge PR", async () => {
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
   const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["Crazy long test", "dco"] } },
+    });
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+});
+
+test("check_run.completed failed check run", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "other test"] } },
+    })
+    .post("/repos/stolostron/config-policy-controller/issues", (body: any) => {
+      const issueContent = body.body as string;
+      expect(issueContent.includes("The pull-request (#6) can be reviewed for more information.")).toBe(true);
+      expect(issueContent.includes("because the PR CI failed")).toBe(true);
+      return true;
+    })
+    .reply(200, { number: 7 });
+
+  const checkRunNoPR = JSON.parse(JSON.stringify(checkRunCompleted));
+  checkRunNoPR.check_run.conclusion = "failure";
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunNoPR });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+  const updatedPendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
+  expect(updatedPendingPR?.githubIssue).toEqual(7);
+  expect(updatedPendingPR?.action).toEqual(PRAction.Blocked);
+});
+
+test("check_run.completed failed other check run", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "other test"] } },
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .reply(200, {
+      check_runs: [
+        { name: "KinD tests (1.17, latest)", conclusion: "success" },
+        { name: "other test", conclusion: "failure" },
+      ],
+    });
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+});
+
+test("check_run.completed failed other commit status ", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .reply(200, {
+      check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .reply(200, { check_runs: [] })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .reply(200, [{ context: "dco", state: "failure" }]);
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+});
+
+test("check_run.completed missing required check runs", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .reply(200, {
+      check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .reply(200, { check_runs: [] })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .reply(200, [{ context: "not required", state: "success" }])
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=2")
+    .reply(200, []);
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+});
+
+test("check_run.completed merge failure", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .reply(200, {
+      check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .reply(200, { check_runs: [] })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .reply(200, [{ context: "dco", state: "success" }])
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=2")
+    .reply(200, [])
     .put("/repos/stolostron/config-policy-controller/pulls/6/merge")
     .reply(400)
     .post("/repos/stolostron/config-policy-controller/issues", (body: any) => {
@@ -195,41 +382,15 @@ test("check_suite.completed failed to merge PR", async () => {
     .reply(200, { number: 7 });
 
   // @ts-expect-error since the event JSON is incomplete
-  await probot.receive({ name: "check_suite", payload: checkSuiteCompleted });
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
 
   expect(mock.pendingMocks()).toStrictEqual([]);
-  // Verify that the pending PR is blocked and an issue was created after the failure
-  const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
-  expect(pendingPR?.action).toEqual(PRAction.Blocked);
-  expect(pendingPR?.githubIssue).toEqual(7);
+  const updatedPendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
+  expect(updatedPendingPR?.githubIssue).toEqual(7);
+  expect(updatedPendingPR?.action).toEqual(PRAction.Blocked);
 });
 
-test("check_suite.completed blocked pending PR", async () => {
-  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
-  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
-  await db.setPendingPR({
-    action: PRAction.Blocked,
-    branch: "release-2.5",
-    githubIssue: 5,
-    prID: 6,
-    repo,
-    upstreamRepo,
-    upstreamPRIDs: [2, 3],
-  });
-  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
-
-  const mock = nock("https://api.github.com");
-
-  // @ts-expect-error since the event JSON is incomplete
-  await probot.receive({ name: "check_suite", payload: checkSuiteCompleted });
-
-  expect(mock.pendingMocks()).toStrictEqual([]);
-});
-
-test("check_suite.completed failure", async () => {
-  const checkSuiteFailure = JSON.parse(JSON.stringify(checkSuiteCompleted));
-  checkSuiteFailure.check_suite.conclusion = "failure";
-
+test("check_run.completed", async () => {
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
   const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
   await db.setPendingPR({
@@ -244,32 +405,159 @@ test("check_suite.completed failure", async () => {
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
   const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .reply(200, {
+      check_runs: [
+        { name: "KinD tests (1.17, latest)", conclusion: "success" },
+        { name: "Not required", conclusion: "failure" },
+      ],
+    })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .reply(200, { check_runs: [] })
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .reply(200, [
+      { context: "dco", state: "success" },
+      { context: "not required", state: "failure" },
+    ])
+    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=2")
+    .reply(200, [])
+    .put("/repos/stolostron/config-policy-controller/pulls/6/merge", (body: any) => {
+      // Verify that the PR was merged
+      expect(body).toMatchObject({ merge_method: "rebase", sha: "db26c3e57ca3a959ca5aad62de7213c562f8c832" });
+      return true;
+    })
+    .reply(200);
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "check_run", payload: checkRunCompleted });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+  // Verify that the pending PR wasn't modified. That is the responsibility of a different handler.
+  expect((await db.getPendingPR(repo, upstreamRepo, "release-2.5"))?.action).toEqual(PRAction.Created);
+});
+
+test("status commit status success on PR", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/pulls?head=db26c3e57ca3a959ca5aad62de7213c562f8c832")
+    .reply(200, [
+      {
+        base: {
+          ref: "release-2.5",
+        },
+        head: {
+          ref: "db26c3e57ca3a959ca5aad62de7213c562f8c832",
+          sha: "db26c3e57ca3a959ca5aad62de7213c562f8c832",
+        },
+        number: 6,
+      },
+    ])
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
+    })
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=1",
+    )
+    .reply(200, {
+      check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
+    })
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=2",
+    )
+    .reply(200, { check_runs: [] })
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=1")
+    .reply(200, [{ context: "dco", state: "success" }])
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=2")
+    .reply(200, [])
+    .put("/repos/stolostron/config-policy-controller/pulls/6/merge", (body: any) => {
+      // Verify that the PR was merged
+      expect(body).toMatchObject({ merge_method: "rebase", sha: "db26c3e57ca3a959ca5aad62de7213c562f8c832" });
+      return true;
+    })
+    .reply(200);
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "status", payload: status });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+  // Verify that the pending PR wasn't modified. That is the responsibility of a different handler.
+  expect((await db.getPendingPR(repo, upstreamRepo, "release-2.5"))?.action).toEqual(PRAction.Created);
+});
+
+test("status ignore pending", async () => {
+  const statusPending = JSON.parse(JSON.stringify(status));
+  statusPending.state = "pending";
+
+  const mock = nock("https://api.github.com");
+
+  // @ts-expect-error since the event JSON is incomplete
+  await probot.receive({ name: "status", payload: statusPending });
+
+  expect(mock.pendingMocks()).toStrictEqual([]);
+});
+
+test("status commit status failure on PR", async () => {
+  const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
+  const upstreamRepo = await db.getOrCreateRepo("open-cluster-management-io", "config-policy-controller");
+  await db.setPendingPR({
+    action: PRAction.Created,
+    branch: "release-2.5",
+    githubIssue: null,
+    prID: 6,
+    repo,
+    upstreamRepo,
+    upstreamPRIDs: [2, 3],
+  });
+  await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
+
+  const statusFailure = JSON.parse(JSON.stringify(status));
+  statusFailure.state = "failure";
+
+  const mock = nock("https://api.github.com")
+    .get("/repos/stolostron/config-policy-controller/pulls?head=db26c3e57ca3a959ca5aad62de7213c562f8c832")
+    .reply(200, [
+      {
+        base: {
+          ref: "release-2.5",
+        },
+        head: {
+          ref: "db26c3e57ca3a959ca5aad62de7213c562f8c832",
+          sha: "db26c3e57ca3a959ca5aad62de7213c562f8c832",
+        },
+        number: 6,
+      },
+    ])
+    .get("/repos/stolostron/config-policy-controller/branches/release-2.5")
+    .reply(200, {
+      protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
+    })
     .post("/repos/stolostron/config-policy-controller/issues", (body: any) => {
       const issueContent = body.body as string;
       expect(issueContent.includes("The pull-request (#6) can be reviewed for more information.")).toBe(true);
-      expect(issueContent.includes('because the PR check suite concluded with "failure"')).toBe(true);
+      expect(issueContent.includes("because the PR CI failed")).toBe(true);
       return true;
     })
     .reply(200, { number: 7 });
 
   // @ts-expect-error since the event JSON is incomplete
-  await probot.receive({ name: "check_suite", payload: checkSuiteFailure });
-
-  expect(mock.pendingMocks()).toStrictEqual([]);
-  // Verify that the pending PR is blocked.
-  const pendingPRResult = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
-  expect(pendingPRResult?.action).toEqual(PRAction.Blocked);
-  expect(pendingPRResult?.githubIssue).toEqual(7);
-});
-
-test("check_suite.completed no PRs on check suite", async () => {
-  const checkSuiteNoPRs = JSON.parse(JSON.stringify(checkSuiteCompleted));
-  checkSuiteNoPRs.check_suite.pull_requests = [];
-
-  const mock = nock("https://api.github.com");
-
-  // @ts-expect-error since the event JSON is incomplete
-  await probot.receive({ name: "check_suite", payload: checkSuiteNoPRs });
+  await probot.receive({ name: "status", payload: statusFailure });
 
   expect(mock.pendingMocks()).toStrictEqual([]);
 });
