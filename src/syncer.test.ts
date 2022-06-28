@@ -454,9 +454,10 @@ test("Syncer.handleForkedBranch close existing PR but already closed", async () 
 
 test("Syncer.handleForkedBranch close existing PR and open new PR", async () => {
   syncer.orgs = { stolostron: { client: jest.fn() } };
-  syncer.orgs.stolostron.client = jest.fn();
   syncer.orgs.stolostron.client.pulls = jest.fn();
   syncer.orgs.stolostron.client.pulls.create = jest.fn().mockReturnValue({ data: { number: 8 } });
+  syncer.orgs.stolostron.client.issues = jest.fn();
+  syncer.orgs.stolostron.client.issues.addLabels = jest.fn().mockReturnValue();
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
   syncer.closePR = jest.fn().mockResolvedValue(true);
@@ -489,6 +490,7 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
       "config-policy-controller",
       "release-2.5",
       "main",
+      ["ok-to-test"],
     ),
   ).resolves.not.toThrowError();
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
@@ -612,6 +614,7 @@ test("Syncer.init", async () => {
 });
 
 test("Syncer.run", async () => {
+  syncer.config.upstreamMappings.stolostron["open-cluster-management-io"].prLabels = ["ok-to-test"];
   syncer.init = jest.fn().mockResolvedValue();
   syncer.handleForkedBranch = jest.fn().mockResolvedValue();
   syncer.orgs = {
@@ -630,6 +633,7 @@ test("Syncer.run", async () => {
     "config-policy-controller",
     "release-2.5",
     "main",
+    ["ok-to-test"],
   );
   expect(syncer.handleForkedBranch).toHaveBeenCalledWith(
     "stolostron",
@@ -637,6 +641,7 @@ test("Syncer.run", async () => {
     "config-policy-controller",
     "release-2.4",
     "release-0.6",
+    ["ok-to-test"],
   );
   expect(syncer.handleForkedBranch).toHaveBeenCalledWith(
     "stolostron",
@@ -644,6 +649,7 @@ test("Syncer.run", async () => {
     "governance-policy-propagator",
     "release-2.5",
     "main",
+    ["ok-to-test"],
   );
   expect(syncer.handleForkedBranch).toHaveBeenCalledWith(
     "stolostron",
@@ -651,6 +657,7 @@ test("Syncer.run", async () => {
     "governance-policy-propagator",
     "release-2.4",
     "release-0.6",
+    ["ok-to-test"],
   );
 });
 

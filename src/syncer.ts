@@ -288,6 +288,7 @@ export class Syncer {
    * @param {string} repoName the GitHub repository of the forked/upstream repository.
    * @param {string} branch the branch of the forked repository.
    * @param {string} upstreamBranch the branch of the upstream repository.
+   * @param {Array<string>} prLabels the optional labels to add to created PRs.
    */
   private async handleForkedBranch(
     org: string,
@@ -295,6 +296,7 @@ export class Syncer {
     repoName: string,
     branch: string,
     upstreamBranch: string,
+    prLabels?: Array<string>,
   ) {
     this.logger.info(`Handling the branch "${branch}" on ${org}/${repoName}`);
 
@@ -432,6 +434,10 @@ export class Syncer {
       body: prBody,
     });
 
+    if (prLabels?.length) {
+      await client.issues.addLabels({ owner: org, repo: repoName, issue_number: newPR.data.number, labels: prLabels });
+    }
+
     this.logger.info(`Created the PR ${newPR.data.html_url}`);
 
     await this.db?.setPendingPR({
@@ -524,7 +530,7 @@ export class Syncer {
           const mapping = this.config.upstreamMappings[org][upstreamOrg];
           for (const [upstreamBranch, branch] of Object.entries(mapping.branchMappings).sort()) {
             try {
-              await this.handleForkedBranch(org, upstreamOrg, repo, branch, upstreamBranch);
+              await this.handleForkedBranch(org, upstreamOrg, repo, branch, upstreamBranch, mapping.prLabels);
             } catch (err) {
               this.logger.error(`The ${org}/${repo} ${branch} branch couldn't be handled: ${err}`);
             }

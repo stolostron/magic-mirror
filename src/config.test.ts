@@ -16,6 +16,7 @@ beforeEach(() => {
             main: "release-2.5",
             "release-0.6": "release-2.4",
           },
+          prLabels: ["ok-to-test"],
         },
       },
     },
@@ -123,9 +124,7 @@ test("validateConfig invalid privateKeyPath path", () => {
 test("validateConfig invalid syncInterval", () => {
   // @ts-expect-error
   config.syncInterval = "test";
-  expect(() => validateConfig(config)).toThrowError(
-    'The configuration\'s "syncInterval" must be a number',
-  );
+  expect(() => validateConfig(config)).toThrowError('The configuration\'s "syncInterval" must be a number');
 });
 
 test("validateConfig upstreamMappings not set", () => {
@@ -194,6 +193,24 @@ test("validateConfig upstreamMappings.targetOrg.upstreamOrg.branchMappings dupli
   expect(() => validateConfig(config)).toThrowError(
     'The configuration\'s upstreamMappings["targetOrg"]["upstreamOrg"]["branchMappings"] contains duplicate ' +
       "target branches",
+  );
+});
+
+test("validateConfig upstreamMappings.targetOrg.upstreamOrg.prLabels invalid type", () => {
+  // @ts-expect-error
+  config.upstreamMappings.stolostron["open-cluster-management-io"].prLabels = { invalid: "type" };
+  expect(() => validateConfig(config)).toThrowError(
+    'The configuration\'s upstreamMappings["stolostron"]["open-cluster-management-io"]["prLabels"] must be an array ' +
+      "of strings",
+  );
+});
+
+test("validateConfig upstreamMappings.targetOrg.upstreamOrg.prLabels invalid items type", () => {
+  // @ts-expect-error
+  config.upstreamMappings.stolostron["open-cluster-management-io"].prLabels = [{ invalid: "type" }];
+  expect(() => validateConfig(config)).toThrowError(
+    'The configuration\'s upstreamMappings["stolostron"]["open-cluster-management-io"]["prLabels"] must be an array ' +
+      "of strings",
   );
 });
 

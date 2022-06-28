@@ -22,6 +22,7 @@ export type Config = {
           // Upstream branch to Fork branch
           [key: string]: string;
         };
+        prLabels?: Array<string>;
       };
     };
   };
@@ -130,6 +131,22 @@ export function validateConfig(config: Config) {
           `The configuration's upstreamMappings["${targetOrg}"]["${upstreamOrg}"]["branchMappings"] contains ` +
             "duplicate target branches",
         );
+      }
+
+      const prLabels = config.upstreamMappings[targetOrg][upstreamOrg].prLabels;
+      if (prLabels) {
+        const errMsg =
+          `The configuration's upstreamMappings["${targetOrg}"]["${upstreamOrg}"]["prLabels"] must be an ` +
+          "array of strings";
+        if (typeof prLabels !== "object" || prLabels.length === undefined) {
+          throw new Error(errMsg);
+        }
+
+        for (const prLabel of prLabels) {
+          if (typeof prLabel !== "string" || prLabel === "") {
+            throw new Error(errMsg);
+          }
+        }
       }
     }
   }

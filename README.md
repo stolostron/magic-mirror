@@ -75,8 +75,9 @@ The configuration file must be present at `./config.json` or `/etc/magic-mirror/
   defaults to `/etc/magic-mirror/auth.key`.
 - `syncInterval` - an optional interval in seconds for how often Magic Mirror should check for new merged upstream PRs.
   This defaults to `30`.
-- `upstreamMappings` - the object that determines which upstream branches should be synced to which fork branches. See
-  the example configure below for a better understanding.
+- `upstreamMappings` - the object that determines which upstream branches should be synced to which fork branches. It
+  also optionally defines which labels to add to created PRs. See the example configuration below for a better
+  understanding.
 - `webhookSecret` - the optional secret that the GitHub webhook event must provide for it to be processed.
 
 Below is an example configuration that syncs from the `main` and `release-0.7` branches in the
@@ -98,7 +99,8 @@ installation.
         "branchMappings": {
           "main": "release-2.6",
           "release-0.7": "release-2.5"
-        }
+        },
+        "prLabels": ["ok-to-test"]
       }
     }
   },
