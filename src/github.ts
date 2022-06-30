@@ -11,6 +11,7 @@ import { Database, PendingPR, PRAction } from "./db";
  * @param {Array<number>} upstreamPRIDs the upstream pull-request IDs that were part of the failed sync.
  * @param {string} reason the reason that the sync failed.
  * @param {number} prID an optional pull-request ID of the forked repository's sync PR. This isn't set if the PR
+ * @param {Array<string>} patchCmd git commands to recreate the PR
  *   couldn't be created due to something like a merge conflict.
  * @return {Promise<number>} a Promise that resolves to the created GitHub issue ID.
  */
@@ -23,6 +24,7 @@ export async function createFailureIssue(
   upstreamPRIDs: Array<number>,
   reason: string,
   prID?: number,
+  patchCmd?: Array<string>,
 ): Promise<number> {
   const title = `😿 Failed to sync the upstream PRs: #${upstreamPRIDs.join(", #")}`;
   const prPrefix = `\n* ${upstreamOrg}/${repo}#`;
@@ -36,8 +38,13 @@ export async function createFailureIssue(
 
   body +=
     `Syncing is paused for the branch ${branch} on ${org}/${repo} until the issue is manually resolved and this ` +
-    "issue is closed.\n\n" +
-    "![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)";
+    "issue is closed.\n";
+
+  if (patchCmd) {
+    body += "\nCommands to recreate the issue:\n" + "\n```\n" + patchCmd.join("\n") + "\n```\n";
+  }
+
+  body += "\n![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)";
 
   const resp = await client.issues.create({ owner: org, repo: repo, title: title, body: body });
   return resp.data.number;

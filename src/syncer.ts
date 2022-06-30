@@ -389,6 +389,9 @@ export class Syncer {
         `Failed to apply the patches on the "${branch}" branch on ${org}/${repoName} from the following PRs from ` +
           ` ${upstreamOrg}/${repoName} ${prIDs.join(", ")}: ${err}`,
       );
+      const patchCmd = patchLocations.map((p) => {
+        return `git cherry-pick -x ${p.head}~${p.numCommits}..${p.head} --allow-empty --keep-redundant-commits`;
+      });
       const issueID = await createFailureIssue(
         client,
         org,
@@ -397,6 +400,8 @@ export class Syncer {
         branch,
         prIDs,
         "one or more patches couldn't cleanly apply",
+        undefined,
+        patchCmd,
       );
 
       await this.db?.setPendingPR({
