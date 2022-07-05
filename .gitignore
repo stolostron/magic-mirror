@@ -5,3 +5,4 @@ config.json
 .vscode/
 magic-mirror.db
 coverage/
+values.yaml
