@@ -405,7 +405,7 @@ export class Syncer {
       await this.db?.deletePendingPR(pendingPR);
     }
 
-    const targetBranch = `${upstreamBranch}-${Date.now()}`;
+    const targetBranch = `magic-mirror-${upstreamBranch}-${Date.now()}`;
     this.logger.info(
       `Creating the "${targetBranch}" branch on ${org}/${repoName} from the following PRs from ` +
         `${upstreamOrg}/${repoName}: ${prIDs.join(", ")}`,
