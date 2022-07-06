@@ -119,30 +119,68 @@ test("Syncer.getToken", async () => {
 
 test("Syncer.getMergedPRIDs", async () => {
   const mockClient = jest.fn();
+  mockClient.pulls = jest.fn();
+  mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
+    new Promise((resolve) =>
+      resolve({
+        data: { merged_at: "2022-06-29T19:51:52Z", number: 2 },
+      }),
+    ),
+  );
   mockClient.rest = jest.fn();
   mockClient.rest.search = jest.fn();
   mockClient.rest.search.issuesAndPullRequests = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
-        data: { items: [{ number: 5 }, { number: 4 }, { number: 3 }] },
+        data: {
+          items: [
+            { number: 4, pull_request: { merged_at: "2022-06-30T14:42:11Z" }, updated_at: "2022-06-30T14:42:11Z" },
+            { number: 3, pull_request: { merged_at: "2022-06-30T15:45:25Z" }, updated_at: "2022-06-30T13:45:25Z" },
+            { number: 5, pull_request: { merged_at: "2022-06-29T19:55:34Z" }, updated_at: "2022-06-29T19:55:34Z" },
+          ],
+        },
       }),
     ),
   );
   mockClient.rest.search.issuesAndPullRequests.mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
-        data: { items: [{ number: 2 }, { number: 1 }] },
+        data: {
+          items: [
+            { number: 2, pull_request: { merged_at: "2022-06-29T19:51:52Z" }, updated_at: "2022-06-29T19:55:34Z" },
+            { number: 1, pull_request: { merged_at: "2022-06-28T14:31:44Z" }, updated_at: "2022-06-28T14:31:44Z" },
+          ],
+        },
       }),
     ),
   );
 
-  await expect(syncer.getMergedPRIDs(mockClient, "org", "repo", 1)).resolves.toEqual([2, 3, 4, 5]);
+  await expect(syncer.getMergedPRIDs(mockClient, "org", "repo", 1)).resolves.toEqual([5, 4, 3]);
 });
 
 test("Syncer.getMergedPRIDs no PRs", async () => {
   const mockClient = jest.fn();
+  mockClient.pulls = jest.fn();
+  mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
+    new Promise((resolve) =>
+      resolve({
+        data: { merged_at: "2022-06-29T19:51:52Z", number: 2 },
+      }),
+    ),
+  );
   mockClient.rest = jest.fn();
   mockClient.rest.search = jest.fn();
+  mockClient.rest.search.issuesAndPullRequests = jest.fn().mockResolvedValueOnce(
+    new Promise((resolve) =>
+      resolve({
+        data: {
+          items: [
+            { number: 2, pull_request: { merged_at: "2022-06-29T19:51:52Z" }, updated_at: "2022-06-29T19:55:34Z" },
+          ],
+        },
+      }),
+    ),
+  );
   mockClient.rest.search.issuesAndPullRequests = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({

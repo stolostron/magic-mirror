@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
+import { components } from "@octokit/openapi-types";
 import winston from "winston";
 
 import { Config } from "./config";
@@ -113,50 +114,83 @@ export class Syncer {
 
   /**
    * Get the merged PR IDs since the last handled PR.
+   *
+   * Note that this doesn't handle the case where two PRs are merged at the same exact second that Magic Mirror is
+   * querying upstream for merged PRs and only one of the two PRs is returned. This is extremely unlikely and accounting
+   * for this would lead to a much less efficient implementation.
    * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization to search.
    * @param {string} repo the GitHub repository to search.
-   * @param {number} lastHandledPR the PR ID to search from.
-   * @return {Promise<Array<number>>} a Promise that resolves to an array of PR IDs in ascending order.
+   * @param {number} lastHandledPRID the PR ID to search from.
+   * @return {Promise<Array<number>>} a Promise that resolves to an array of PR IDs in ascending order of when they
+   *   were merged.
    */
   private async getMergedPRIDs(
     client: Octokit,
     org: string,
     repo: string,
-    lastHandledPR: number,
+    lastHandledPRID: number,
   ): Promise<Array<number>> {
-    const prIDs = new Set<number>();
-
-    const convertSetToArray = () => {
-      // Sort is alphabetical by default, which is why a custom sort function is required.
-      return Array.from(prIDs).sort((a, b) => a - b);
-    };
+    const lastHandledPR = await client.pulls.get({ owner: org, repo: repo, pull_number: lastHandledPRID });
+    const lastPRMergedAt = new Date(lastHandledPR.data.merged_at as string);
 
     let page = 1;
+    const prs: Array<components["schemas"]["issue-search-result-item"]> = [];
 
     while (true) {
+      // Use the search API instead of the PR list API to use the merged filter.
       const resp = await client.rest.search.issuesAndPullRequests({
         q: `repo:${org}/${repo}+is:pr+is:merged`,
         page: page,
         per_page: 10,
-        sort: "created",
+        // Updated could mean any activity such as a new comment on the PR.
+        sort: "updated",
         order: "desc",
       });
 
       if (!resp.data.items.length) {
-        return convertSetToArray();
+        break;
       }
 
+      let lastPRFound = false;
+
       for (const pr of resp.data.items) {
-        if (pr.number <= lastHandledPR) {
-          return convertSetToArray();
+        // If a PR is encountered that was last updated before the time when the last handled PR was merged, no further
+        // PRs are relevant.
+        if (new Date(pr.updated_at as string) < lastPRMergedAt) {
+          lastPRFound = true;
+          break;
         }
 
-        prIDs.add(pr.number);
+        if (new Date(pr.pull_request?.merged_at as string) > lastPRMergedAt) {
+          prs.push(pr);
+        }
+      }
+
+      if (lastPRFound) {
+        break;
       }
 
       page++;
     }
+
+    // Sort the PRs by when they were merged.
+    return prs
+      .sort((a, b) => {
+        const aMergedAt = new Date(a.pull_request?.merged_at as string);
+        const bMergedAt = new Date(b.pull_request?.merged_at as string);
+
+        if (aMergedAt < bMergedAt) {
+          return -1;
+        }
+
+        if (aMergedAt > bMergedAt) {
+          return 1;
+        }
+
+        return 0;
+      })
+      .map((pr) => pr.number);
   }
 
   /**
@@ -188,7 +222,7 @@ export class Syncer {
    * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization where the PRs are located.
    * @param {string} repo the GitHub repository where the PRs are located.
-   * @param {Array<number>} prIDs the PR IDs to get target branches for.
+   * @param {Array<number>} prIDs the PR IDs to get target branches for in ascending order of when they were merged.
    * @return {Promise<object>} a Promise that resolves to an object where the keys are target branches and the values
    *   are the respective PR IDs.
    */
