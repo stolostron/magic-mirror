@@ -9,7 +9,11 @@ export function newLogger(logLevel = "info") {
   // Log out to the console. This is suited for a containerized deployment.
   return winston.createLogger({
     level: logLevel,
-    format: winston.format.simple(),
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.align(),
+      winston.format.printf((info) => `${info.timestamp}  ${info.level}  ${info.message}`),
+    ),
     transports: [new winston.transports.Console()],
   });
 }
