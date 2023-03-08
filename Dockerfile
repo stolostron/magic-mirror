@@ -15,7 +15,8 @@ RUN npm run build
 
 FROM registry.access.redhat.com/ubi9:latest
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    npm_config_cache=/tmp
 
 RUN dnf install -y npm git-core && dnf clean -y all
 
