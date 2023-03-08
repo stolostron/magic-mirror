@@ -274,6 +274,12 @@ test("Syncer.getUpstreamRepos", async () => {
         data: [{ name: "config-policy-controller" }, { name: "governance-policy-propagator" }],
       }),
     ),
+  ).mockResolvedValue(
+    new Promise((resolve) =>
+      resolve({
+        data: [],
+      }),
+    ),
   );
 
   syncer.orgs = { stolostron: { client: mockClient } };
@@ -298,6 +304,12 @@ test("Syncer.getUpstreamRepos user's repos", async () => {
     new Promise((resolve) =>
       resolve({
         data: [{ name: "config-policy-controller" }, { name: "governance-policy-propagator" }],
+      }),
+    ),
+  ).mockResolvedValue(
+    new Promise((resolve) =>
+      resolve({
+        data: [],
       }),
     ),
   );
