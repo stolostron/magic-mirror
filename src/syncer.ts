@@ -279,31 +279,63 @@ export class Syncer {
         throw new Error(`The upstreamOrgs mapping specifies the org ${installationOrg} which is not installed`);
       }
 
+      let repos: Array<components["schemas"]["minimal-repository"]> = [];
+
       for (const org in this.config.upstreamMappings[installationOrg]) {
         if (!this.upstreamOrgRepos[org]) {
           this.upstreamOrgRepos[org] = new Set<string>();
         }
 
-        let resp = await this.orgs[installationOrg].client?.repos
-          .listForOrg({ org: org, type: "public" })
-          .catch((err) => {
-            if (err.status === 404) {
-              this.logger.debug(`Could not find the org ${org}, assuming it's a user`);
-              return;
+        let isUserRepo = false;
+        let page = 1;
+
+        while (true) {
+          const resp = await this.orgs[installationOrg].client?.repos
+            .listForOrg({ org: org, type: "public", page: page, per_page: 20 })
+            .catch((err) => {
+              if (err.status === 404) {
+                this.logger.debug(`Could not find the org ${org}, assuming it's a user`);
+                isUserRepo = true;
+                return;
+              }
+
+              throw err;
+            });
+
+          if (isUserRepo) {
+            break;
+          }
+
+          if (!resp?.data.length) {
+            break;
+          }
+
+          repos = repos.concat(resp.data);
+
+          page++;
+        }
+
+        if (isUserRepo) {
+          page = 1;
+
+          while (true) {
+            const resp = await this.orgs[installationOrg].client?.repos.listForUser({
+              username: org,
+              per_page: 20,
+              page: page,
+            });
+
+            if (!resp?.data.length) {
+              break;
             }
 
-            throw err;
-          });
+            repos = repos.concat(resp.data);
 
-        if (!resp?.data) {
-          resp = await this.orgs[installationOrg].client?.repos.listForUser({ username: org });
-
-          if (!resp?.data) {
-            continue;
+            page++;
           }
         }
 
-        for (const repo of resp.data) {
+        for (const repo of repos) {
           this.upstreamOrgRepos[org].add(repo.name);
         }
       }
