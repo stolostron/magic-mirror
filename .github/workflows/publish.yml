@@ -34,8 +34,7 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v0.1.15
         with:
-          body:
-            "# magic-mirror ${{ github.ref_name }}\n- See the [CHANGELOG](https://github.com/${{
-            github.repository }}/blob/main/CHANGELOG/CHANGELOG-${{ github.ref_name }}.md) for more
-            details.\n- The released image is quay.io/${{ github.repository }}:${{ github.ref_name
-            }}"
+          generate_release_notes: true
+          draft: true
+          prerelease: false
+          body: "## magic-mirror ${{ github.ref_name }}\nThe released image is quay.io/${{ github.repository }}:${{ github.ref_name}}\n"
