@@ -13,6 +13,7 @@ import { Database, PendingPR, PRAction } from "./db";
  * @param {number} prID an optional pull-request ID of the forked repository's sync PR. This isn't set if the PR
  * @param {Array<string>} patchCmd git commands to recreate the PR
  *   couldn't be created due to something like a merge conflict.
+ * @param {string} err the error when the sync was attempted.
  * @return {Promise<number>} a Promise that resolves to the created GitHub issue ID.
  */
 export async function createFailureIssue(
@@ -25,6 +26,7 @@ export async function createFailureIssue(
   reason: string,
   prID?: number,
   patchCmd?: Array<string>,
+  err?: any,
 ): Promise<number> {
   const title = `😿 Failed to sync the upstream PRs: #${upstreamPRIDs.join(", #")}`;
   const prPrefix = `\n* ${upstreamOrg}/${repo}#`;
@@ -39,6 +41,10 @@ export async function createFailureIssue(
   body +=
     `Syncing is paused for the branch ${branch} on ${org}/${repo} until the issue is manually resolved and this ` +
     "issue is closed.\n";
+
+  if (err) {
+    body += "\nSyncing error:\n```\n" + err + "\n```\n";
+  }
 
   if (patchCmd) {
     body += "\nCommands to recreate the issue:\n" + "\n```\n" + patchCmd.join("\n") + "\n```\n";
