@@ -468,6 +468,7 @@ export class Syncer {
         "one or more patches couldn't cleanly apply",
         undefined,
         patchCmd,
+        err,
       );
 
       await this.db?.setPendingPR({

@@ -85,7 +85,8 @@ test("createFailureIssue with patchCmd", () => {
   expect(
     createFailureIssue(
       // @ts-ignore
-      mockClient, "kramerica", "industries", "upstream", "main", [5, 7], "it failed", undefined, ["git cherry-pick"],
+      mockClient, "kramerica", "industries", "upstream", "main",
+      [5, 7], "it failed", undefined, ["git cherry-pick"], Error("ya pick failed"),
     ),
   ).resolves.toEqual(6);
 
@@ -97,6 +98,10 @@ test("createFailureIssue with patchCmd", () => {
       "* upstream/industries#5\n* upstream/industries#7\n\n" +
       "Syncing is paused for the branch main on kramerica/industries until the issue is manually resolved and this " +
       "issue is closed.\n" +
+      "\nSyncing error:\n" +
+      "```\n" +
+      "Error: ya pick failed\n" +
+      "```\n" +
       "\nCommands to recreate the issue:\n\n```\ngit cherry-pick\n```\n" +
       "\n![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)",
     owner: "kramerica",
