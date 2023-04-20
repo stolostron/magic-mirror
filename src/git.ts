@@ -43,17 +43,21 @@ export async function applyPatches(
       .remote(["add", "upstream", upstreamRemoteURL])
       .fetch(["upstream", "--prune"]);
 
-    await Promise.all(
-      patchLocations.map((p) =>
-        git.raw([
-          "cherry-pick",
-          "-x",
-          `${p.head}~${p.numCommits}..${p.head}`,
-          "--allow-empty",
-          "--keep-redundant-commits",
-        ]),
-      ),
-    );
+    // Collect cherry-pick commands. The cherry-picks need to be run synchronously,
+    // otherwise Git will complain that there's a cherry-pick in progress.
+    const cherryPickCmds = patchLocations.map((p) => {
+      return [
+        "cherry-pick",
+        "-x",
+        `${p.head}~${p.numCommits}..${p.head}`,
+        "--allow-empty",
+        "--keep-redundant-commits",
+      ];
+    });
+
+    for (const cmd of cherryPickCmds) {
+      await git.raw(cmd);
+    }
 
     await git.push(["origin", "HEAD"]);
   } finally {
