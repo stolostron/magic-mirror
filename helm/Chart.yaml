@@ -3,4 +3,4 @@ name: magic-mirror
 description: A Helm chart to deploy Magic Mirror
 type: application
 version: 1.0.0
-appVersion: "v1.2.0"
+appVersion: "v1.2.1"
