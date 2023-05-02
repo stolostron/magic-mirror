@@ -6,7 +6,7 @@ WORKDIR /opt/magic-mirror
 
 COPY package.json package-lock.json ./
 
-RUN npm install
+RUN npm ci
 
 COPY . .
 
@@ -27,8 +27,10 @@ WORKDIR /opt/magic-mirror
 
 COPY package.json package-lock.json ./
 
-RUN npm install
+RUN npm ci
 
 COPY --from=build /opt/magic-mirror/build ./build
+
+RUN chown -R 1000:1000 "/tmp"
 
 USER 1000
