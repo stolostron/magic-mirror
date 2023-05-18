@@ -4,7 +4,7 @@ import { ApplicationFunctionOptions, Probot, Server } from "probot";
 
 import { Config, loadConfig } from "./config";
 import { Database, PRAction } from "./db";
-import { createFailureIssue, getRequiredChecks, mergePR } from "./github";
+import { appendPRDescription, createFailureIssue, getRequiredChecks, mergePR } from "./github";
 import { newLogger } from "./log";
 
 const okayCheckRunConclusions = new Set(["success", "neutral", "skipped"]);
@@ -262,6 +262,20 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
       pendingPR.githubIssue = issueID;
       pendingPR.action = PRAction.Blocked;
       await db.setPendingPR(pendingPR);
+
+      // Append to description on PR to attach the issue to the pending PR
+      const closesMsg = `Closes #${issueID}`;
+      const appended = await appendPRDescription(
+        client,
+        organization,
+        repoName,
+        pr.number,
+        closesMsg,
+      );
+
+      if (!appended) {
+        logger.info(`Failed to append "${closesMsg}" to PR ${pr.number} on ${organization}/${repoName}`);
+      }
 
       return true;
     }
