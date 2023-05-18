@@ -57,6 +57,65 @@ export async function createFailureIssue(
 }
 
 /**
+ * Comment on a GitHub issue (or pull request).
+ * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {string} org the GitHub organization where the issue is to add a comment.
+ * @param {string} repo the GitHub repository where the issue is to add a comment.
+ * @param {number} id the issue ID.
+ * @param {string} message the content of the comment.
+ * @return {Promise<boolean>}
+ */
+export async function addComment(
+  client: Octokit,
+  org: string,
+  repo: string,
+  id: number,
+  message: string,
+): Promise<boolean> {
+  try {
+    await client.issues.createComment({ owner: org, repo: repo, issue_number: id, body: message });
+
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Update a GitHub pull request.
+ * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {string} org the GitHub organization where the issue is to add a comment.
+ * @param {string} repo the GitHub repository where the issue is to add a comment.
+ * @param {number} id the pull-request ID.
+ * @param {string} message the content to append to the PR description.
+ * @return {Promise<boolean>} a Promise that resolves to a boolean indicating if the PR was successfully updated.
+ */
+export async function appendPRDescription(
+  client: Octokit,
+  org: string,
+  repo: string,
+  id: number,
+  message: string,
+): Promise<boolean> {
+  const resp = await client.pulls.get({owner: org, repo: repo, pull_number: id});
+
+  let body = resp.data.body;
+  if (body == null) {
+    return false;
+  }
+
+  body += `\n\n${message}`;
+
+  try {
+    await client.pulls.update({ owner: org, repo: repo, pull_number: id, body: body });
+
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
  * Get the required check names (statuses and check runs) for the branch.
  * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {string} organization the GitHub organization of the repository to check.

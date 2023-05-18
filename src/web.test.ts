@@ -226,7 +226,15 @@ test("check_run.completed failed check run", async () => {
       expect(issueContent.includes("because the PR CI failed")).toBe(true);
       return true;
     })
-    .reply(200, { number: 7 });
+    .reply(200, { number: 7 })
+    .get("/repos/stolostron/config-policy-controller/pulls/6")
+    .reply(200, { body: "" })
+    .patch("/repos/stolostron/config-policy-controller/pulls/6", (body: any) => {
+      const prContent = body.body as string;
+      expect(prContent.includes("Closes #7")).toBe(true);
+      return true;
+    })
+    .reply(200);
 
   const checkRunNoPR = JSON.parse(JSON.stringify(checkRunCompleted));
   checkRunNoPR.check_run.conclusion = "failure";
@@ -554,7 +562,15 @@ test("status commit status failure on PR", async () => {
       expect(issueContent.includes("because the PR CI failed")).toBe(true);
       return true;
     })
-    .reply(200, { number: 7 });
+    .reply(200, { number: 7 })
+    .get("/repos/stolostron/config-policy-controller/pulls/6")
+    .reply(200, { body: "" })
+    .patch("/repos/stolostron/config-policy-controller/pulls/6", (body: any) => {
+      const prContent = body.body as string;
+      expect(prContent.includes("Closes #7")).toBe(true);
+      return true;
+    })
+    .reply(200);
 
   // @ts-expect-error since the event JSON is incomplete
   await probot.receive({ name: "status", payload: statusFailure });
