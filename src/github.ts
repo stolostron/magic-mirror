@@ -63,7 +63,7 @@ export async function createFailureIssue(
  * @param {string} repo the GitHub repository where the issue is to add a comment.
  * @param {number} id the issue ID.
  * @param {string} message the content of the comment.
- * @return {Promise<boolean>}
+ * @return {Promise<any>}
  */
 export async function addComment(
   client: Octokit,
@@ -71,13 +71,13 @@ export async function addComment(
   repo: string,
   id: number,
   message: string,
-): Promise<boolean> {
+): Promise<any> {
   try {
     await client.issues.createComment({ owner: org, repo: repo, issue_number: id, body: message });
 
-    return true;
+    return;
   } catch (err) {
-    return false;
+    return err;
   }
 }
 
@@ -88,7 +88,7 @@ export async function addComment(
  * @param {string} repo the GitHub repository where the issue is to add a comment.
  * @param {number} id the pull-request ID.
  * @param {string} message the content to append to the PR description.
- * @return {Promise<boolean>} a Promise that resolves to a boolean indicating if the PR was successfully updated.
+ * @return {Promise<any>} a Promise that resolves to errors whether the PR was successfully updated.
  */
 export async function appendPRDescription(
   client: Octokit,
@@ -96,12 +96,17 @@ export async function appendPRDescription(
   repo: string,
   id: number,
   message: string,
-): Promise<boolean> {
-  const resp = await client.pulls.get({owner: org, repo: repo, pull_number: id});
+): Promise<any> {
+  let body;
+  try {
+    const resp = await client.pulls.get({owner: org, repo: repo, pull_number: id});
 
-  let body = resp.data.body;
-  if (body == null) {
-    return false;
+    body = resp.data.body;
+    if (body == null) {
+      return;
+    }
+  } catch (err) {
+    return err;
   }
 
   body += `\n\n${message}`;
@@ -109,9 +114,9 @@ export async function appendPRDescription(
   try {
     await client.pulls.update({ owner: org, repo: repo, pull_number: id, body: body });
 
-    return true;
+    return;
   } catch (err) {
-    return false;
+    return err;
   }
 }
 
