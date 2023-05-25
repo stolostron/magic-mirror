@@ -265,7 +265,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
 
       // Append to description on PR to attach the issue to the pending PR
       const closesMsg = `Closes #${issueID}`;
-      const appended = await appendPRDescription(
+      const appendErr = await appendPRDescription(
         client,
         organization,
         repoName,
@@ -273,8 +273,8 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
         closesMsg,
       );
 
-      if (!appended) {
-        logger.info(`Failed to append "${closesMsg}" to PR ${pr.number} on ${organization}/${repoName}`);
+      if (appendErr) {
+        logger.info(`Error appending "${closesMsg}" to PR ${pr.number} on ${organization}/${repoName}: ${appendErr}`);
       }
 
       return true;
