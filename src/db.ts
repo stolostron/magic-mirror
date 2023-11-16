@@ -48,6 +48,7 @@ const createSQLStatements = [
           id INTEGER PRIMARY KEY autoincrement,
           repo_id INTEGER NOT NULL,
           branch TEXT NOT NULL,
+          upstream_authors TEXT NOT NULL,
           upstream_repo_id INTEGER NOT NULL,
           upstream_pr_ids TEXT NOT NULL,
           action TEXT NOT NULL,
@@ -82,6 +83,7 @@ export type PendingPR = {
   branch: string;
   upstreamRepo: Repo;
   upstreamPRIDs: Array<number>;
+  upstreamAuthors: Array<string>;
   action: PRAction;
   prID: number | null;
   githubIssue: number | null;
@@ -225,7 +227,7 @@ export class Database {
    */
   async getPendingPR(repo: Repo, upstreamRepo: Repo, branch: string): Promise<PendingPR | null> {
     const sql = `
-      SELECT upstream_pr_ids, action, pr_id, github_issue
+      SELECT upstream_pr_ids, action, pr_id, github_issue, upstream_authors
       FROM pending_prs
       WHERE repo_id=? AND upstream_repo_id=? AND branch=?
     `;
@@ -239,6 +241,7 @@ export class Database {
       branch: branch,
       upstreamRepo: upstreamRepo,
       upstreamPRIDs: (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr)),
+      upstreamAuthors: (result.upstream_authors as string).split(","),
       action: result.action,
       prID: result.pr_id,
       githubIssue: result.github_issue,
@@ -256,7 +259,7 @@ export class Database {
    */
   async getPendingPRByIssue(repo: Repo, issueID: number): Promise<PendingPR | null> {
     const sql = `
-      SELECT upstream_pr_ids, action, branch, pr_id, upstream_repo_id
+      SELECT upstream_pr_ids, upstream_authors, action, branch, pr_id, upstream_repo_id
       FROM pending_prs
       WHERE repo_id=? AND github_issue=?
     `;
@@ -273,6 +276,7 @@ export class Database {
       // @ts-expect-error since there are foreign key restrictions that prevent upstreamRepo from being null.
       upstreamRepo: upstreamRepo,
       upstreamPRIDs: (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr)),
+      upstreamAuthors: (result.upstream_authors as string).split(","),
       action: result.action,
       prID: result.pr_id,
       githubIssue: issueID,
@@ -290,7 +294,7 @@ export class Database {
    */
   async getPendingPRByPRID(repo: Repo, prID: number): Promise<PendingPR | null> {
     const sql = `
-      SELECT upstream_pr_ids, action, branch, github_issue, upstream_repo_id
+      SELECT upstream_pr_ids, upstream_authors, action, branch, github_issue, upstream_repo_id
       FROM pending_prs
       WHERE repo_id=? AND pr_id=?
     `;
@@ -307,6 +311,7 @@ export class Database {
       // @ts-expect-error since there are foreign key restrictions that prevent upstreamRepo from being null.
       upstreamRepo: upstreamRepo,
       upstreamPRIDs: (result.upstream_pr_ids as string).split(",").map((idStr) => parseInt(idStr)),
+      upstreamAuthors: (result.upstream_authors as string).split(","),
       action: result.action,
       prID: prID,
       githubIssue: result.github_issue,
@@ -356,6 +361,38 @@ export class Database {
           if (errEncountered === true) {
             return;
           }
+        }
+
+        // Add upstream_authors if there's a table that doesn't have this new column yet
+        // (this logic could be removed in a future release once the table is established
+        // over a number of releases)
+        const upstreamAuthors = await this.get(
+          "SELECT * FROM pragma_table_info('pending_prs') WHERE name='upstream_authors'",
+        );
+        if (!upstreamAuthors) {
+          await this.run(
+            "ALTER TABLE pending_prs ADD upstream_authors TEXT NULL",
+            [],
+          ).catch((err) => {
+            reject(err);
+            return;
+          });
+
+          await this.run(
+            "UPDATE pending_prs SET upstream_authors = 'not-applicable' WHERE upstream_authors IS NULL",
+            [],
+          ).catch((err) => {
+            reject(err);
+            return;
+          });
+
+          await this.run(
+            "ALTER TABLE pending_prs ALTER COLUMN upstream_authors SET NOT NULL",
+            [],
+          ).catch((err) => {
+            reject(err);
+            return;
+          });
         }
 
         resolve();
@@ -417,12 +454,13 @@ export class Database {
   async setPendingPR(pendingPR: PendingPR): Promise<void> {
     const sql = `
       INSERT INTO pending_prs (
-        repo_id, branch, upstream_repo_id, upstream_pr_ids, action, pr_id, github_issue
+        repo_id, branch, upstream_repo_id, upstream_pr_ids, upstream_authors, action, pr_id, github_issue
       )
-      VALUES(?, ?, ?, ?, ?, ?, ?)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(repo_id, upstream_repo_id, branch)
       DO UPDATE SET
         upstream_pr_ids=excluded.upstream_pr_ids,
+        upstream_authors=excluded.upstream_authors,
         action=excluded.action,
         pr_id=excluded.pr_id,
         github_issue=excluded.github_issue
@@ -432,6 +470,7 @@ export class Database {
       pendingPR.branch,
       pendingPR.upstreamRepo.id,
       pendingPR.upstreamPRIDs.join(","),
+      pendingPR.upstreamAuthors.join(","),
       pendingPR.action,
       pendingPR.prID,
       pendingPR.githubIssue,

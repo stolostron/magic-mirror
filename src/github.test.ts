@@ -1,4 +1,4 @@
-import { createFailureIssue } from "./github";
+import { createFailureIssue, getOwners } from "./github";
 
 test("createFailureIssue", () => {
   const mockClient = {
@@ -86,7 +86,7 @@ test("createFailureIssue with patchCmd", () => {
     createFailureIssue(
       // @ts-ignore
       mockClient, "kramerica", "industries", "upstream", "main",
-      [5, 7], "it failed", undefined, ["git cherry-pick"], Error("ya pick failed"),
+      [5, 7], "it failed", undefined, ["skywalker"], ["git cherry-pick"], Error("ya pick failed"),
     ),
   ).resolves.toEqual(6);
 
@@ -107,6 +107,22 @@ test("createFailureIssue with patchCmd", () => {
     owner: "kramerica",
     repo: "industries",
     title: "😿 Failed to sync the upstream PRs: #5, #7",
+    assignees: ["skywalker"],
   };
   expect(mockClient.issues.create).toHaveBeenCalledWith(expectedIssueArgs);
+});
+
+test("getOwners", () => {
+  const mockClient = {
+    repos: {
+      getContent: jest.fn(() => {
+        return new Promise((resolve) => resolve({ content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" }));
+      }),
+    },
+  };
+
+  const expectedOwners = ["skywalker", "doctorwho"];
+
+  // @ts-ignore
+  expect(getOwners(mockClient, "", "", "")).resolves.toEqual(expectedOwners);
 });

@@ -9,6 +9,7 @@ import tmp from "tmp";
 export type patchLocation = {
   head: string;
   numCommits: number;
+  author: string;
 };
 
 /**
