@@ -84,6 +84,7 @@ test("issues.closed pending PR with issue", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -109,6 +110,7 @@ test("issues.closed pending PR with issue and PR ID", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -164,6 +166,7 @@ test("check_run.completed blocked PR", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -186,6 +189,7 @@ test("check_run.completed irrelevant check run", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -212,6 +216,7 @@ test("check_run.completed failed check run", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -228,13 +233,19 @@ test("check_run.completed failed check run", async () => {
     })
     .reply(200, { number: 7 })
     .get("/repos/stolostron/config-policy-controller/pulls/6")
-    .reply(200, { body: "" })
+    .reply(200, { body: "", assignees: [{ login: "doctorwho" }] })
     .patch("/repos/stolostron/config-policy-controller/pulls/6", (body: any) => {
       const prContent = body.body as string;
       expect(prContent.includes("Closes #7")).toBe(true);
+      const issueAssignees = body.assignees as Array<string>;
+      expect(issueAssignees.some((assignee) => {
+        return assignee == "doctorwho";
+      })).toBe(true);
       return true;
     })
-    .reply(200);
+    .reply(200)
+    .get("/repos/stolostron/config-policy-controller/contents/OWNERS?ref=release-2.5")
+    .reply(200, { content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" });
 
   const checkRunNoPR = JSON.parse(JSON.stringify(checkRunCompleted));
   checkRunNoPR.check_run.conclusion = "failure";
@@ -259,6 +270,7 @@ test("check_run.completed failed other check run", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -292,6 +304,7 @@ test("check_run.completed failed other commit status ", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -326,6 +339,7 @@ test("check_run.completed missing required check runs", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -362,6 +376,7 @@ test("check_run.completed merge failure", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -409,6 +424,7 @@ test("check_run.completed", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -459,6 +475,7 @@ test("status commit status success on PR", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -532,6 +549,7 @@ test("status commit status failure on PR", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -564,13 +582,15 @@ test("status commit status failure on PR", async () => {
     })
     .reply(200, { number: 7 })
     .get("/repos/stolostron/config-policy-controller/pulls/6")
-    .reply(200, { body: "" })
+    .reply(200, { body: "", assignees: { login: "" } })
     .patch("/repos/stolostron/config-policy-controller/pulls/6", (body: any) => {
       const prContent = body.body as string;
       expect(prContent.includes("Closes #7")).toBe(true);
       return true;
     })
-    .reply(200);
+    .reply(200)
+    .get("/repos/stolostron/config-policy-controller/contents/OWNERS?ref=release-2.5")
+    .reply(200, { content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" });
 
   // @ts-expect-error since the event JSON is incomplete
   await probot.receive({ name: "status", payload: statusFailure });
@@ -598,6 +618,7 @@ test("pull_request.closed pending PR with GitHub issue", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
@@ -619,6 +640,7 @@ test("pull_request.closed pending PR", async () => {
     repo,
     upstreamRepo,
     upstreamPRIDs: [2, 3],
+    upstreamAuthors: ["two", "three"],
   });
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 

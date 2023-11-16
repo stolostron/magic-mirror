@@ -6,7 +6,7 @@ import winston from "winston";
 import { Config } from "./config";
 import { Database, PendingPR, PRAction, Repo } from "./db";
 import { applyPatches, patchLocation } from "./git";
-import { createFailureIssue, getRequiredChecks, mergePR } from "./github";
+import { createFailureIssue, getOwners, getRequiredChecks, mergePR } from "./github";
 import { newLogger } from "./log";
 
 /**
@@ -211,7 +211,11 @@ export class Syncer {
 
     const prs = await Promise.all(prIDs.map((prID) => client.pulls.get({ owner: org, pull_number: prID, repo: repo })));
     prs.forEach((pr, i) => {
-      rv.push({ head: pr.data.merge_commit_sha as string, numCommits: pr.data.commits });
+      rv.push({
+        head: pr.data.merge_commit_sha as string,
+        numCommits: pr.data.commits,
+        author: pr.data.user?.login || "",
+      });
     });
 
     return rv;
@@ -448,6 +452,15 @@ export class Syncer {
     const gitRemote = `https://x-access-token:${token}@github.com/${org}/${repoName}.git`;
     const upstreamGitRemote = `https://github.com/${upstreamOrg}/${repoName}.git`;
 
+    // Get the owners to parse the commit authors that are also owners
+    const owners = await getOwners(client, org, repoName, branch);
+    const assignees = [];
+    for (let i = patchLocations.length - 1; i >= 0; i--) {
+      if (owners.includes(patchLocations[i].author)) {
+        assignees.push(patchLocations[i].author);
+      }
+    }
+
     try {
       await applyPatches(gitRemote, upstreamGitRemote, branch, targetBranch, patchLocations);
     } catch (err) {
@@ -458,6 +471,7 @@ export class Syncer {
       const patchCmd = patchLocations.map((p) => {
         return `git cherry-pick -x ${p.head}~${p.numCommits}..${p.head} --allow-empty --keep-redundant-commits`;
       });
+
       const issueID = await createFailureIssue(
         client,
         org,
@@ -467,6 +481,7 @@ export class Syncer {
         prIDs,
         "one or more patches couldn't cleanly apply",
         undefined,
+        assignees,
         patchCmd,
         err,
       );
@@ -475,6 +490,7 @@ export class Syncer {
         repo: repo,
         upstreamRepo: upstreamRepo,
         upstreamPRIDs: prIDs,
+        upstreamAuthors: assignees,
         action: PRAction.Blocked,
         branch: branch,
         githubIssue: issueID,
@@ -510,6 +526,7 @@ export class Syncer {
       repo: repo,
       upstreamRepo: upstreamRepo,
       upstreamPRIDs: prIDs,
+      upstreamAuthors: assignees,
       action: PRAction.Created,
       branch: branch,
       prID: newPR.data.number,

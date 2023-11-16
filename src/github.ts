@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { Database, PendingPR, PRAction } from "./db";
+import yaml from "js-yaml";
 
 /**
  * Create a GitHub issue indicating that sync from upstream failed.
@@ -11,8 +12,9 @@ import { Database, PendingPR, PRAction } from "./db";
  * @param {Array<number>} upstreamPRIDs the upstream pull-request IDs that were part of the failed sync.
  * @param {string} reason the reason that the sync failed.
  * @param {number} prID an optional pull-request ID of the forked repository's sync PR. This isn't set if the PR
- * @param {Array<string>} patchCmd git commands to recreate the PR
  *   couldn't be created due to something like a merge conflict.
+ * @param {Array<string>} assignees user to assign to the issue.
+ * @param {Array<string>} patchCmd git commands to recreate the PR
  * @param {string} err the error when the sync was attempted.
  * @return {Promise<number>} a Promise that resolves to the created GitHub issue ID.
  */
@@ -25,6 +27,7 @@ export async function createFailureIssue(
   upstreamPRIDs: Array<number>,
   reason: string,
   prID?: number,
+  assignees?: Array<string>,
   patchCmd?: Array<string>,
   err?: any,
 ): Promise<number> {
@@ -52,7 +55,7 @@ export async function createFailureIssue(
 
   body += "\n![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)";
 
-  const resp = await client.issues.create({ owner: org, repo: repo, title: title, body: body });
+  const resp = await client.issues.create({ owner: org, repo: repo, title: title, body: body, assignees: assignees });
   return resp.data.number;
 }
 
@@ -87,23 +90,30 @@ export async function addComment(
  * @param {string} org the GitHub organization where the issue is to add a comment.
  * @param {string} repo the GitHub repository where the issue is to add a comment.
  * @param {number} id the pull-request ID.
+ * @param {Array<string>} assignees the assignees for the PR.
  * @param {string} message the content to append to the PR description.
  * @return {Promise<any>} a Promise that resolves to errors whether the PR was successfully updated.
  */
-export async function appendPRDescription(
+export async function updatePR(
   client: Octokit,
   org: string,
   repo: string,
   id: number,
+  assignees: Array<string>,
   message: string,
 ): Promise<any> {
   let body;
   try {
-    const resp = await client.pulls.get({owner: org, repo: repo, pull_number: id});
+    const resp = await client.pulls.get({ owner: org, repo: repo, pull_number: id });
 
     body = resp.data.body;
     if (body == null) {
       return;
+    }
+
+    // Use the previous assignees if it was already specified
+    if (resp.data.assignees && resp.data.assignees.length > 0) {
+      assignees = resp.data.assignees?.map((assignee) => assignee.login) || [];
     }
   } catch (err) {
     return err;
@@ -112,7 +122,7 @@ export async function appendPRDescription(
   body += `\n\n${message}`;
 
   try {
-    await client.pulls.update({ owner: org, repo: repo, pull_number: id, body: body });
+    await client.pulls.update({ owner: org, repo: repo, pull_number: id, body: body, assignees: assignees });
 
     return;
   } catch (err) {
@@ -174,6 +184,7 @@ export async function mergePR(client: Octokit, db: Database, pendingPR: PendingP
       pendingPR.upstreamPRIDs,
       `the pull-request (#${pendingPR.prID}) couldn't be merged: ${err}`,
       pendingPR.prID as number,
+      pendingPR.upstreamAuthors,
     );
 
     pendingPR.githubIssue = issueID;
@@ -182,4 +193,46 @@ export async function mergePR(client: Octokit, db: Database, pendingPR: PendingP
 
     return false;
   }
+}
+
+/**
+ * Returns list of approvers from the OWNERS file at the base of the repo.
+ * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {string} organization the GitHub organization of the repository to check.
+ * @param {string} repoName the GitHub repository name of the repository to check.
+ * @param {string} branchName the GitHub branch name to check.
+ * @param {Array<string>} prAuthor the author of the pull request.
+ * @return {Promise<boolean>} a Promise that resolves to whether the given author is also an owner.
+ */
+export async function getOwners(
+  client: Octokit,
+  organization: string,
+  repoName: string,
+  branchName: string,
+): Promise<string[]> {
+  try {
+    const ownersFileObject = await client.repos.getContent({
+      owner: organization,
+      repo: repoName,
+      path: "OWNERS",
+      ref: branchName,
+      mediaType: { format: "application/vnd.github+json" },
+    });
+
+    if (
+      !Array.isArray(ownersFileObject) &&
+      "content" in ownersFileObject &&
+      typeof ownersFileObject.content == "string"
+    ) {
+      const rawYaml = Buffer.from(ownersFileObject.content, "base64").toString("utf-8");
+      const ownersObj = yaml.load(rawYaml);
+      if (typeof ownersObj == "object" && ownersObj && "approvers" in ownersObj && Array.isArray(ownersObj.approvers)) {
+        return ownersObj.approvers;
+      }
+    }
+  } catch (err) {
+    return Promise.reject(new Error(`failed to retrieve OWNERS file: ${err}`));
+  }
+
+  return [];
 }

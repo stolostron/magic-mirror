@@ -4,7 +4,7 @@ import path from "path";
 import tmp from "tmp";
 
 import { Database, PendingPR, PRAction } from "./db";
-import { getRequiredChecks, mergePR } from "./github";
+import { getOwners, getRequiredChecks, mergePR } from "./github";
 import { applyPatches } from "./git";
 
 // This must be before importing from syncer.ts for the mock to take effect
@@ -203,22 +203,22 @@ test("Syncer.getPRPatchLocations", async () => {
   mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
-        data: { merge_commit_sha: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", commits: 2 },
+        data: { merge_commit_sha: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", commits: 2, user: { login: "usertoo" } },
       }),
     ),
   );
   mockClient.pulls.get.mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
-        data: { merge_commit_sha: "b6d3319c0383b929bb05da90add55a07f3f75660", commits: 1 },
+        data: { merge_commit_sha: "b6d3319c0383b929bb05da90add55a07f3f75660", commits: 1, user: { login: "user" } },
       }),
     ),
   );
 
   const syncer = new Syncer(config);
   await expect(syncer.getPRPatchLocations(mockClient, "org", "repo", [3, 5])).resolves.toEqual([
-    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 },
-    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1 },
+    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2, author: "usertoo" },
+    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1, author: "user" },
   ]);
 });
 
@@ -334,6 +334,7 @@ test("Syncer.handleForkedBranch blocked PR", async () => {
     action: PRAction.Blocked,
     githubIssue: 3,
     upstreamPRIDs: [7, 8, 9],
+    upstreamAuthors: ["seven", "eight", "nine"],
     prID: null,
   };
   await db.setPendingPR(pendingPR);
@@ -453,6 +454,7 @@ test("Syncer.handleForkedBranch existing unmerged PR already covers all merged u
     action: PRAction.Created,
     githubIssue: null,
     upstreamPRIDs: [4, 5],
+    upstreamAuthors: ["four", "five"],
     prID: 4,
   };
   await db.setPendingPR(pendingPR);
@@ -486,6 +488,7 @@ test("Syncer.handleForkedBranch close existing PR but already closed", async () 
     action: PRAction.Created,
     githubIssue: null,
     upstreamPRIDs: [4],
+    upstreamAuthors: ["four"],
     prID: 4,
   };
   await db.setPendingPR(pendingPR);
@@ -507,12 +510,16 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
   syncer.orgs.stolostron.client = jest.fn();
   syncer.orgs.stolostron.client.pulls = jest.fn();
   syncer.orgs.stolostron.client.pulls.create = jest.fn().mockReturnValue({ data: { number: 8 } });
+  syncer.orgs.stolostron.client.repos = jest.fn();
+  // Return OWNERS file lising only "four" as an approver
+  syncer.orgs.stolostron.client.repos.getContent = jest.fn()
+    .mockReturnValue({ content: "YXBwcm92ZXJzOgogIC0gZm91cgo=" });
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
   syncer.closePR = jest.fn().mockResolvedValue(true);
   syncer.getPRPatchLocations = jest.fn().mockResolvedValue([
-    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 },
-    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1 },
+    { head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2, author: "four" },
+    { head: "b6d3319c0383b929bb05da90add55a07f3f75660", numCommits: 1, author: "five" },
   ]);
   syncer.getToken = jest.fn().mockResolvedValue("secret token");
 
@@ -528,6 +535,7 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
     action: PRAction.Created,
     githubIssue: null,
     upstreamPRIDs: [4],
+    upstreamAuthors: ["four"],
     prID: 4,
   };
   await db.setPendingPR(mockPendingPR);
@@ -544,6 +552,7 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toEqual(8);
   expect(pendingPR?.upstreamPRIDs).toEqual([4, 5]);
+  expect(pendingPR?.upstreamAuthors).toEqual(["four"]);
 });
 
 test("Syncer.handleForkedBranch merge PR right away", async () => {
@@ -555,6 +564,9 @@ test("Syncer.handleForkedBranch merge PR right away", async () => {
   syncer.orgs.stolostron.client.pulls.create = jest
     .fn()
     .mockReturnValue({ data: { head: { sha: "dfg3319c0383b929bb05da90add55a07f3f756677" }, number: 8 } });
+  syncer.orgs.stolostron.client.repos = jest.fn();
+  syncer.orgs.stolostron.client.repos.getContent = jest.fn()
+    .mockReturnValue({ content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" });
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
   syncer.closePR = jest.fn().mockResolvedValue(true);
@@ -582,19 +594,19 @@ test("Syncer.handleForkedBranch merge PR right away", async () => {
 });
 
 test("Syncer.handleForkedBranch merge conflict on patch", async () => {
-  syncer.orgs = { stolostron: {} };
+  syncer.orgs = { stolostron: { client: { repos: {} } } };
+  // Return OWNERS file lising "doctorwho" as an approver
+  syncer.orgs.stolostron.client.repos.getContent = jest.fn().mockResolvedValue({
+    content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=",
+  });
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4] });
-  syncer.getPRPatchLocations = jest
-    .fn()
-    .mockResolvedValue([{ head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2 }]);
+  syncer.getPRPatchLocations = jest.fn().mockResolvedValue([{
+    head: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", numCommits: 2, author: "doctorwho",
+  }]);
   syncer.getToken = jest.fn().mockResolvedValue("secret token");
-  (applyPatches as jest.Mock).mockImplementation(
-    () =>
-      new Promise<bool>((_, reject) => {
-        reject(new Error("some error"));
-      }),
-  );
+  (applyPatches as jest.Mock).mockRejectedValue(new Error("some error"));
+  getOwners = jest.fn().mockResolvedValue([]);
 
   const db = syncer.db as Database;
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
@@ -613,6 +625,7 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toBeNull();
   expect(pendingPR?.githubIssue).toEqual(8);
+  expect(pendingPR?.upstreamAuthors).toEqual(["doctorwho"]);
 });
 
 test("Syncer.init", async () => {

@@ -42,14 +42,14 @@ test("applyPatches with two valid patches and an empty patch", async () => {
   const patchLocations: Array<patchLocation> = [];
   fs.writeFileSync(path.join(upstreamDirObj.name, "message.txt"), "Hello Raleigh, NC!\n");
   await upstreamGitObj.add("message.txt").commit("Add the state to the message");
-  patchLocations.push({ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 1 });
+  patchLocations.push({ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 1, author: "" });
   fs.writeFileSync(path.join(upstreamDirObj.name, "message.txt"), "Hello Raleigh, NC, USA!\n");
   await upstreamGitObj.add("message.txt").commit("Add the country to the message");
   fs.writeFileSync(path.join(upstreamDirObj.name, "message.txt"), "Hello Raleigh, NC, United States of America!\n");
   await upstreamGitObj.add("message.txt").commit("Spell out the country in the message");
-  patchLocations.push({ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 2 });
+  patchLocations.push({ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 2, author: "" });
   await upstreamGitObj.raw(["commit", "--allow-empty", "-m", "Empty commit"]);
-  patchLocations.push({ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 1 });
+  patchLocations.push({ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 1, author: "" });
 
   await expect(
     applyPatches("file://" + dirObj.name, "file://" + upstreamDirObj.name, "main", "main-with-patch", patchLocations),
@@ -67,7 +67,7 @@ test("applyPatches invalid patch", async () => {
   fs.writeFileSync(path.join(upstreamDirObj.name, "message.txt"), "Hello\nRaleigh, NC!\n");
   await upstreamGitObj.add("message.txt").commit("Add the state");
 
-  const patchLocations = [{ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 1 }];
+  const patchLocations = [{ head: await upstreamGitObj.revparse(["HEAD"]), numCommits: 1, author: "" }];
 
   await expect(
     applyPatches("file://" + dirObj.name, "file://" + upstreamDirObj.name, "main", "main-with-patch", patchLocations),
