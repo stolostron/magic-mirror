@@ -4,7 +4,7 @@ import { ApplicationFunctionOptions, Probot, Server } from "probot";
 
 import { Config, loadConfig } from "./config";
 import { Database, PRAction } from "./db";
-import { appendPRDescription, createFailureIssue, getRequiredChecks, mergePR } from "./github";
+import { createFailureIssue, getOwners, getRequiredChecks, mergePR, updatePR } from "./github";
 import { newLogger } from "./log";
 
 const okayCheckRunConclusions = new Set(["success", "neutral", "skipped"]);
@@ -247,6 +247,19 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
     // If the check run or status failed, the other check runs and status associated with the PR don't need to be
     // checked.
     if (success !== true) {
+      const assignees = [];
+      try {
+        const owners = await getOwners(client, organization, repoName, pr.base.ref);
+
+        for (const author in pendingPR.upstreamAuthors) {
+          if (owners.includes(author)) {
+            assignees.push(author);
+          }
+        }
+      } catch (err) {
+        logger.error(`Failed to parse issue assignees: ${err}`);
+      }
+
       const issueID = await createFailureIssue(
         client,
         organization,
@@ -256,6 +269,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
         pendingPR.upstreamPRIDs,
         "the PR CI failed",
         pr.number,
+        assignees,
       );
       logger.info(`Created the GitHub issue #${issueID} on ${organization}/${repoName} to notify of the failure`);
 
@@ -263,15 +277,9 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
       pendingPR.action = PRAction.Blocked;
       await db.setPendingPR(pendingPR);
 
-      // Append to description on PR to attach the issue to the pending PR
+      // Append to description on PR to attach the issue to the pending PR and add assignees (if not already assigned)
       const closesMsg = `Closes #${issueID}`;
-      const appendErr = await appendPRDescription(
-        client,
-        organization,
-        repoName,
-        pr.number,
-        closesMsg,
-      );
+      const appendErr = await updatePR(client, organization, repoName, pr.number, assignees, closesMsg);
 
       if (appendErr) {
         logger.info(`Error appending "${closesMsg}" to PR ${pr.number} on ${organization}/${repoName}: ${appendErr}`);

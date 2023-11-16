@@ -67,6 +67,7 @@ test("Database pending_prs table", async () => {
     branch: "main",
     upstreamRepo: upstreamRepo,
     upstreamPRIDs: [4, 7],
+    upstreamAuthors: ["four", "seven"],
     action: PRAction.Created,
     prID: 3,
     githubIssue: 4,
