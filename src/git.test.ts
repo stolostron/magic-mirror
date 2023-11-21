@@ -53,7 +53,7 @@ test("applyPatches with two valid patches and an empty patch", async () => {
 
   await expect(
     applyPatches("file://" + dirObj.name, "file://" + upstreamDirObj.name, "main", "main-with-patch", patchLocations),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
   await gitObj.checkout("main-with-patch").then(() => {
     const textOutput = fs.readFileSync(path.join(dirObj.name, "message.txt"));
     expect(textOutput.toString()).toEqual("Hello Raleigh, NC, United States of America!\n");

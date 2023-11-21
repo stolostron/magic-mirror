@@ -346,7 +346,7 @@ test("Syncer.handleForkedBranch blocked PR", async () => {
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
 });
 
 test("Syncer.handleForkedBranch not handled before", async () => {
@@ -361,7 +361,7 @@ test("Syncer.handleForkedBranch not handled before", async () => {
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
 
   const db = syncer.db as Database;
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
@@ -382,7 +382,7 @@ test("Syncer.handleForkedBranch not handled before and no PRs yet in upstream", 
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
 
   const db = syncer.db as Database;
   const repo = await db.getOrCreateRepo("stolostron", "config-policy-controller");
@@ -408,7 +408,7 @@ test("Syncer.handleForkedBranch no new PRs", async () => {
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
 
   await expect(db.getPendingPR(repo, upstreamRepo, "release-2.5")).resolves.toBeNull();
 });
@@ -431,7 +431,7 @@ test("Syncer.handleForkedBranch no new PRs for the stolostron branch", async () 
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
 
   await expect(db.getPendingPR(repo, upstreamRepo, "release-2.5")).resolves.toBeNull();
 });
@@ -465,7 +465,7 @@ test("Syncer.handleForkedBranch existing unmerged PR already covers all merged u
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
 });
 
 test("Syncer.handleForkedBranch close existing PR but already closed", async () => {
@@ -498,7 +498,7 @@ test("Syncer.handleForkedBranch close existing PR but already closed", async () 
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
   await expect(db.getPendingPR(repo, upstreamRepo, "release-2.5")).resolves.toBeTruthy();
 });
 
@@ -540,7 +540,7 @@ test("Syncer.handleForkedBranch close existing PR and open new PR", async () => 
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toEqual(8);
   expect(pendingPR?.upstreamPRIDs).toEqual([4, 5]);
@@ -577,7 +577,7 @@ test("Syncer.handleForkedBranch merge PR right away", async () => {
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
   expect((mergePR as jest.Mock).mock.calls.length).toBe(1);
 });
 
@@ -609,7 +609,7 @@ test("Syncer.handleForkedBranch merge conflict on patch", async () => {
       "release-2.5",
       "main",
     ),
-  ).resolves.not.toThrowError();
+  ).resolves.not.toThrow();
   const pendingPR = await db.getPendingPR(repo, upstreamRepo, "release-2.5");
   expect(pendingPR?.prID).toBeNull();
   expect(pendingPR?.githubIssue).toEqual(8);
