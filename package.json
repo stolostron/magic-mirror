@@ -17,6 +17,7 @@
     "@octokit/openapi-types": "^21.2.0",
     "@octokit/rest": "^20.1.0",
     "@octokit/webhooks-types": "^7.5.0",
+    "@types/js-yaml": "^4.0.9",
     "probot": "^13.2.0",
     "simple-git": "^3.24.0",
     "sqlite3": "^5.1.7",
