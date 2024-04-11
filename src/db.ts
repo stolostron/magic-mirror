@@ -363,38 +363,6 @@ export class Database {
           }
         }
 
-        // Add upstream_authors if there's a table that doesn't have this new column yet
-        // (this logic could be removed in a future release once the table is established
-        // over a number of releases)
-        const upstreamAuthors = await this.get(
-          "SELECT * FROM pragma_table_info('pending_prs') WHERE name='upstream_authors'",
-        );
-        if (!upstreamAuthors) {
-          await this.run(
-            "ALTER TABLE pending_prs ADD upstream_authors TEXT NULL",
-            [],
-          ).catch((err) => {
-            reject(err);
-            return;
-          });
-
-          await this.run(
-            "UPDATE pending_prs SET upstream_authors = 'not-applicable' WHERE upstream_authors IS NULL",
-            [],
-          ).catch((err) => {
-            reject(err);
-            return;
-          });
-
-          await this.run(
-            "ALTER TABLE pending_prs ALTER COLUMN upstream_authors SET NOT NULL",
-            [],
-          ).catch((err) => {
-            reject(err);
-            return;
-          });
-        }
-
         resolve();
       });
     });
