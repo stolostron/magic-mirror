@@ -23,7 +23,7 @@
     "probot": "^12.3.3",
     "simple-git": "^3.22.0",
     "sqlite3": "^5.1.7",
-    "tmp": "^0.2.1",
+    "tmp": "^0.2.4",
     "winston": "^3.11.0"
   },
   "devDependencies": {
