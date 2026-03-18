@@ -3,7 +3,7 @@
   "version": "1.3.2",
   "description": "GitHub App that syncs upstream repositories with forks using PRs",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "build": "npx tsc",
