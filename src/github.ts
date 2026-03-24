@@ -1,10 +1,10 @@
-import { Octokit } from "@octokit/rest";
+import { ProbotOctokit } from "probot";
 import { Database, PendingPR, PRAction } from "./db";
 import yaml from "js-yaml";
 
 /**
  * Create a GitHub issue indicating that sync from upstream failed.
- * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {string} org the GitHub organization where the issue is to be created.
  * @param {string} repo the GitHub repository where the issue is to be created.
  * @param {string} upstreamOrg the upstream GitHub organization that sync was from.
@@ -19,7 +19,7 @@ import yaml from "js-yaml";
  * @return {Promise<number>} a Promise that resolves to the created GitHub issue ID.
  */
 export async function createFailureIssue(
-  client: Octokit,
+  client: ProbotOctokit,
   org: string,
   repo: string,
   upstreamOrg: string,
@@ -55,13 +55,19 @@ export async function createFailureIssue(
 
   body += "\n![sad Yoda](https://media.giphy.com/media/3o7qDK5J5Uerg3atJ6/giphy.gif)";
 
-  const resp = await client.issues.create({ owner: org, repo: repo, title: title, body: body, assignees: assignees });
+  const resp = await client.rest.issues.create({
+    owner: org,
+    repo: repo,
+    title: title,
+    body: body,
+    assignees: assignees,
+  });
   return resp.data.number;
 }
 
 /**
  * Comment on a GitHub issue (or pull request).
- * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {string} org the GitHub organization where the issue is to add a comment.
  * @param {string} repo the GitHub repository where the issue is to add a comment.
  * @param {number} id the issue ID.
@@ -69,14 +75,14 @@ export async function createFailureIssue(
  * @return {Promise<any>}
  */
 export async function addComment(
-  client: Octokit,
+  client: ProbotOctokit,
   org: string,
   repo: string,
   id: number,
   message: string,
 ): Promise<any> {
   try {
-    await client.issues.createComment({ owner: org, repo: repo, issue_number: id, body: message });
+    await client.rest.issues.createComment({ owner: org, repo: repo, issue_number: id, body: message });
 
     return;
   } catch (err) {
@@ -86,7 +92,7 @@ export async function addComment(
 
 /**
  * Update a GitHub pull request.
- * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {string} org the GitHub organization where the issue is to add a comment.
  * @param {string} repo the GitHub repository where the issue is to add a comment.
  * @param {number} id the pull-request ID.
@@ -95,7 +101,7 @@ export async function addComment(
  * @return {Promise<any>} a Promise that resolves to errors whether the PR was successfully updated.
  */
 export async function updatePR(
-  client: Octokit,
+  client: ProbotOctokit,
   org: string,
   repo: string,
   id: number,
@@ -104,7 +110,7 @@ export async function updatePR(
 ): Promise<any> {
   let body;
   try {
-    const resp = await client.pulls.get({ owner: org, repo: repo, pull_number: id });
+    const resp = await client.rest.pulls.get({ owner: org, repo: repo, pull_number: id });
 
     body = resp.data.body;
     if (body == null) {
@@ -113,7 +119,7 @@ export async function updatePR(
 
     // Use the previous assignees if it was already specified
     if (resp.data.assignees && resp.data.assignees.length > 0) {
-      assignees = resp.data.assignees?.map((assignee) => assignee.login) || [];
+      assignees = resp.data.assignees?.map((assignee: { login: string }) => assignee.login) || [];
     }
   } catch (err) {
     return err;
@@ -122,7 +128,13 @@ export async function updatePR(
   body += `\n\n${message}`;
 
   try {
-    await client.pulls.update({ owner: org, repo: repo, pull_number: id, body: body, assignees: assignees });
+    await client.rest.pulls.update({ owner: org, repo: repo, pull_number: id, body: body });
+    await client.rest.issues.update({
+      owner: org,
+      repo: repo,
+      issue_number: id,
+      assignees: assignees,
+    });
 
     return;
   } catch (err) {
@@ -132,19 +144,19 @@ export async function updatePR(
 
 /**
  * Get the required check names (statuses and check runs) for the branch.
- * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {string} organization the GitHub organization of the repository to check.
  * @param {string} repoName the GitHub repository name of the repository to check.
  * @param {string} branchName the GitHub branch name to check.
  * @return {Promise<Set<string>>} a Promise that resolves to a set of required check names.
  */
 export async function getRequiredChecks(
-  client: Octokit,
+  client: ProbotOctokit,
   organization: string,
   repoName: string,
   branchName: string,
 ): Promise<Set<string>> {
-  const branch = await client.repos.getBranch({ owner: organization, repo: repoName, branch: branchName });
+  const branch = await client.rest.repos.getBranch({ owner: organization, repo: repoName, branch: branchName });
   if (!branch.data.protection.enabled || !branch.data.protection.required_status_checks) {
     return new Set<string>();
   }
@@ -156,16 +168,21 @@ export async function getRequiredChecks(
  * Merge the GitHub pull-request with the rebase merge method.
  *
  * If the PR cannot be merged, a GitHub issue is created to notify of the failure.
- * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {Database} db the Database instance to use to update the PendingPR object if the PR merge fails.
  * @param {PendingPR} pendingPR the PendingPR object that represents the PR to merge.
  * @param {string} head the Git commit hash of the head of the PR to merge. If the PR head has changed while the PR was
  *   being examined by Magic Mirror, the PR won't be merged.
  * @return {Promise<boolean>} a Promise that resolves to a boolean indicating if the PR was successfully merged.
  */
-export async function mergePR(client: Octokit, db: Database, pendingPR: PendingPR, head: string): Promise<boolean> {
+export async function mergePR(
+  client: ProbotOctokit,
+  db: Database,
+  pendingPR: PendingPR,
+  head: string,
+): Promise<boolean> {
   try {
-    await client.pulls.merge({
+    await client.rest.pulls.merge({
       owner: pendingPR.repo.organization,
       repo: pendingPR.repo.name,
       pull_number: pendingPR.prID as number,
@@ -197,7 +214,7 @@ export async function mergePR(client: Octokit, db: Database, pendingPR: PendingP
 
 /**
  * Returns list of approvers from the OWNERS file at the base of the repo.
- * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+ * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
  * @param {string} organization the GitHub organization of the repository to check.
  * @param {string} repoName the GitHub repository name of the repository to check.
  * @param {string} branchName the GitHub branch name to check.
@@ -205,21 +222,21 @@ export async function mergePR(client: Octokit, db: Database, pendingPR: PendingP
  * @return {Promise<boolean>} a Promise that resolves to whether the given author is also an owner.
  */
 export async function getOwners(
-  client: Octokit,
+  client: ProbotOctokit,
   organization: string,
   repoName: string,
   branchName: string,
 ): Promise<string[]> {
   try {
-    const ownersFileObject = await client.repos.getContent({
+    const { data: ownersFileObject } = await client.rest.repos.getContent({
       owner: organization,
       repo: repoName,
       path: "OWNERS",
       ref: branchName,
-      mediaType: { format: "application/vnd.github+json" },
     });
 
     if (
+      ownersFileObject &&
       !Array.isArray(ownersFileObject) &&
       "content" in ownersFileObject &&
       typeof ownersFileObject.content == "string"

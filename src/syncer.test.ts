@@ -9,7 +9,6 @@ import { applyPatches } from "./git";
 
 // This must be before importing from syncer.ts for the mock to take effect
 jest.mock("@octokit/auth-app", () => ({
-  ...jest.requireActual("@octokit/auth-app"),
   createAppAuth: () => {
     const mockAuth = jest.fn();
     mockAuth.mockResolvedValue({ token: "secret token" });
@@ -68,31 +67,33 @@ afterEach(() => {
 
 test("Syncer.closePR", async () => {
   const mockClient = jest.fn();
-  mockClient.pulls = jest.fn();
-  mockClient.pulls.get = jest.fn().mockResolvedValue({ data: { state: "open" } });
+  mockClient.rest = jest.fn();
+  mockClient.rest.pulls = jest.fn();
+  mockClient.rest.pulls.get = jest.fn().mockResolvedValue({ data: { state: "open" } });
 
-  mockClient.issues = jest.fn();
-  mockClient.issues.createComment = jest.fn().mockResolvedValue({});
+  mockClient.rest.issues = jest.fn();
+  mockClient.rest.issues.createComment = jest.fn().mockResolvedValue({});
 
-  mockClient.pulls.update = jest.fn().mockResolvedValue({});
+  mockClient.rest.pulls.update = jest.fn().mockResolvedValue({});
 
   await expect(syncer.closePR(mockClient, "org", "repo", 123)).resolves.toBe(true);
-  expect(mockClient.pulls.update.mock.calls.length).toBe(1);
+  expect(mockClient.rest.pulls.update.mock.calls.length).toBe(1);
 });
 
 test("Syncer.closePR already closed", async () => {
   const mockClient = jest.fn();
-  mockClient.pulls = jest.fn();
-  mockClient.pulls.get = jest.fn().mockResolvedValue({ data: { state: "closed" } });
+  mockClient.rest = jest.fn();
+  mockClient.rest.pulls = jest.fn();
+  mockClient.rest.pulls.get = jest.fn().mockResolvedValue({ data: { state: "closed" } });
 
-  mockClient.issues = jest.fn();
-  mockClient.issues.createComment = jest.fn();
+  mockClient.rest.issues = jest.fn();
+  mockClient.rest.issues.createComment = jest.fn();
 
-  mockClient.pulls.update = jest.fn();
+  mockClient.rest.pulls.update = jest.fn();
 
   await expect(syncer.closePR(mockClient, "org", "repo", 123)).resolves.toBe(false);
-  expect(mockClient.issues.createComment.mock.calls.length).toBe(0);
-  expect(mockClient.pulls.update.mock.calls.length).toBe(0);
+  expect(mockClient.rest.issues.createComment.mock.calls.length).toBe(0);
+  expect(mockClient.rest.pulls.update.mock.calls.length).toBe(0);
 });
 
 test("Syncer.getLatestPRID", async () => {
@@ -119,15 +120,15 @@ test("Syncer.getToken", async () => {
 
 test("Syncer.getMergedPRIDs", async () => {
   const mockClient = jest.fn();
-  mockClient.pulls = jest.fn();
-  mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
+  mockClient.rest = jest.fn();
+  mockClient.rest.pulls = jest.fn();
+  mockClient.rest.pulls.get = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: { merged_at: "2022-06-29T19:51:52Z", number: 2 },
       }),
     ),
   );
-  mockClient.rest = jest.fn();
   mockClient.rest.search = jest.fn();
   mockClient.rest.search.issuesAndPullRequests = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
@@ -160,54 +161,56 @@ test("Syncer.getMergedPRIDs", async () => {
 
 test("Syncer.getMergedPRIDs no PRs", async () => {
   const mockClient = jest.fn();
-  mockClient.pulls = jest.fn();
-  mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
+  mockClient.rest = jest.fn();
+  mockClient.rest.pulls = jest.fn();
+  mockClient.rest.pulls.get = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: { merged_at: "2022-06-29T19:51:52Z", number: 2 },
       }),
     ),
   );
-  mockClient.rest = jest.fn();
   mockClient.rest.search = jest.fn();
-  mockClient.rest.search.issuesAndPullRequests = jest.fn().mockResolvedValueOnce(
-    new Promise((resolve) =>
-      resolve({
-        data: {
-          items: [
-            { number: 2, pull_request: { merged_at: "2022-06-29T19:51:52Z" }, updated_at: "2022-06-29T19:55:34Z" },
-          ],
-        },
-      }),
-    ),
-  );
-  mockClient.rest.search.issuesAndPullRequests = jest.fn().mockResolvedValueOnce(
-    new Promise((resolve) =>
-      resolve({
-        data: { items: [] },
-      }),
-    ),
-  );
+  mockClient.rest.search.issuesAndPullRequests = jest.fn()
+    .mockResolvedValueOnce(
+      new Promise((resolve) =>
+        resolve({
+          data: {
+            items: [
+              { number: 2, pull_request: { merged_at: "2022-06-29T19:51:52Z" }, updated_at: "2022-06-29T19:55:34Z" },
+            ],
+          },
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Promise((resolve) =>
+        resolve({
+          data: { items: [] },
+        }),
+      ),
+    );
 
   await expect(syncer.getMergedPRIDs(mockClient, "org", "repo", 1)).resolves.toEqual([]);
 });
 
-test("Syncer.getGitHubClient", () => {
-  const client = syncer.getGitHubClient(523);
+test("Syncer.getProbotOctokit", () => {
+  const client = syncer.getProbotOctokit(523);
   expect(client).not.toBeNull();
 });
 
 test("Syncer.getPRPatchLocations", async () => {
   const mockClient = jest.fn();
-  mockClient.pulls = jest.fn();
-  mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
+  mockClient.rest = jest.fn();
+  mockClient.rest.pulls = jest.fn();
+  mockClient.rest.pulls.get = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: { merge_commit_sha: "79bf6a3d414f4ff08fb726fc60f641e9bd60a025", commits: 2, user: { login: "usertoo" } },
       }),
     ),
   );
-  mockClient.pulls.get.mockResolvedValueOnce(
+  mockClient.rest.pulls.get.mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: { merge_commit_sha: "b6d3319c0383b929bb05da90add55a07f3f75660", commits: 1, user: { login: "user" } },
@@ -224,8 +227,9 @@ test("Syncer.getPRPatchLocations", async () => {
 
 test("Syncer.getBranchToPRIDs", async () => {
   const mockClient = jest.fn();
-  mockClient.pulls = jest.fn();
-  mockClient.pulls.get = jest.fn().mockResolvedValueOnce(
+  mockClient.rest = jest.fn();
+  mockClient.rest.pulls = jest.fn();
+  mockClient.rest.pulls.get = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: {
@@ -236,7 +240,7 @@ test("Syncer.getBranchToPRIDs", async () => {
       }),
     ),
   );
-  mockClient.pulls.get.mockResolvedValueOnce(
+  mockClient.rest.pulls.get.mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: {
@@ -247,7 +251,7 @@ test("Syncer.getBranchToPRIDs", async () => {
       }),
     ),
   );
-  mockClient.pulls.get.mockResolvedValueOnce(
+  mockClient.rest.pulls.get.mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: {
@@ -267,8 +271,9 @@ test("Syncer.getBranchToPRIDs", async () => {
 
 test("Syncer.getUpstreamRepos", async () => {
   const mockClient = jest.fn();
-  mockClient.repos = jest.fn();
-  mockClient.repos.listForOrg = jest.fn().mockResolvedValueOnce(
+  mockClient.rest = jest.fn();
+  mockClient.rest.repos = jest.fn();
+  mockClient.rest.repos.listForOrg = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: [{ name: "config-policy-controller" }, { name: "governance-policy-propagator" }],
@@ -292,15 +297,16 @@ test("Syncer.getUpstreamRepos", async () => {
 
 test("Syncer.getUpstreamRepos user's repos", async () => {
   const mockClient = jest.fn();
-  mockClient.repos = jest.fn();
-  mockClient.repos.listForOrg = jest.fn().mockResolvedValue(
+  mockClient.rest = jest.fn();
+  mockClient.rest.repos = jest.fn();
+  mockClient.rest.repos.listForOrg = jest.fn().mockResolvedValue(
     new Promise((_, reject) => {
       const err = new Error();
       err.status = 404;
       reject(err);
     }),
   );
-  mockClient.repos.listForUser = jest.fn().mockResolvedValueOnce(
+  mockClient.rest.repos.listForUser = jest.fn().mockResolvedValueOnce(
     new Promise((resolve) =>
       resolve({
         data: [{ name: "config-policy-controller" }, { name: "governance-policy-propagator" }],
@@ -508,12 +514,13 @@ test("Syncer.handleForkedBranch close existing PR but already closed", async () 
 test("Syncer.handleForkedBranch close existing PR and open new PR", async () => {
   syncer.orgs = { stolostron: { client: jest.fn() } };
   syncer.orgs.stolostron.client = jest.fn();
-  syncer.orgs.stolostron.client.pulls = jest.fn();
-  syncer.orgs.stolostron.client.pulls.create = jest.fn().mockReturnValue({ data: { number: 8 } });
-  syncer.orgs.stolostron.client.repos = jest.fn();
-  // Return OWNERS file lising only "four" as an approver
-  syncer.orgs.stolostron.client.repos.getContent = jest.fn()
-    .mockReturnValue({ content: "YXBwcm92ZXJzOgogIC0gZm91cgo=" });
+  syncer.orgs.stolostron.client.rest = jest.fn();
+  syncer.orgs.stolostron.client.rest.pulls = jest.fn();
+  syncer.orgs.stolostron.client.rest.pulls.create = jest.fn().mockReturnValue({ data: { number: 8 } });
+  syncer.orgs.stolostron.client.rest.repos = jest.fn();
+  // Return OWNERS file listing only "four" as an approver
+  syncer.orgs.stolostron.client.rest.repos.getContent = jest.fn()
+    .mockReturnValue({ data: { content: "YXBwcm92ZXJzOgogIC0gZm91cgo=" } });
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
   syncer.closePR = jest.fn().mockResolvedValue(true);
@@ -560,13 +567,14 @@ test("Syncer.handleForkedBranch merge PR right away", async () => {
 
   syncer.orgs = { stolostron: { client: jest.fn() } };
   syncer.orgs.stolostron.client = jest.fn();
-  syncer.orgs.stolostron.client.pulls = jest.fn();
-  syncer.orgs.stolostron.client.pulls.create = jest
+  syncer.orgs.stolostron.client.rest = jest.fn();
+  syncer.orgs.stolostron.client.rest.pulls = jest.fn();
+  syncer.orgs.stolostron.client.rest.pulls.create = jest
     .fn()
     .mockReturnValue({ data: { head: { sha: "dfg3319c0383b929bb05da90add55a07f3f756677" }, number: 8 } });
-  syncer.orgs.stolostron.client.repos = jest.fn();
-  syncer.orgs.stolostron.client.repos.getContent = jest.fn()
-    .mockReturnValue({ content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" });
+  syncer.orgs.stolostron.client.rest.repos = jest.fn();
+  syncer.orgs.stolostron.client.rest.repos.getContent = jest.fn()
+    .mockReturnValue({ data: { content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" } });
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4, 5]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4, 5] });
   syncer.closePR = jest.fn().mockResolvedValue(true);
@@ -595,9 +603,11 @@ test("Syncer.handleForkedBranch merge PR right away", async () => {
 
 test("Syncer.handleForkedBranch merge conflict on patch", async () => {
   syncer.orgs = { stolostron: { client: { repos: {} } } };
+  syncer.orgs.stolostron.client.rest = jest.fn();
+  syncer.orgs.stolostron.client.rest.repos = jest.fn();
   // Return OWNERS file lising "doctorwho" as an approver
-  syncer.orgs.stolostron.client.repos.getContent = jest.fn().mockResolvedValue({
-    content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=",
+  syncer.orgs.stolostron.client.rest.repos.getContent = jest.fn().mockResolvedValue({
+    data: { content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" },
   });
   syncer.getMergedPRIDs = jest.fn().mockResolvedValue([4]);
   syncer.getBranchToPRIDs = jest.fn().mockResolvedValue({ main: [4] });
@@ -632,8 +642,9 @@ test("Syncer.init", async () => {
   config.dbPath = path.join(dirObj.name, "init-test.db");
   const syncer = new Syncer(config);
   const mockAppClient = jest.fn();
-  mockAppClient.apps = jest.fn();
-  mockAppClient.apps.listInstallations = jest.fn().mockResolvedValueOnce({
+  mockAppClient.rest = jest.fn();
+  mockAppClient.rest.apps = jest.fn();
+  mockAppClient.rest.apps.listInstallations = jest.fn().mockResolvedValueOnce({
     data: [
       { account: { login: "stolostron" }, id: 1 },
       { account: { login: "tom-hanks" }, id: 2 },
@@ -641,18 +652,20 @@ test("Syncer.init", async () => {
   });
 
   const mockInstallationClient1 = jest.fn();
-  mockInstallationClient1.apps = jest.fn();
-  mockInstallationClient1.apps.listReposAccessibleToInstallation = jest.fn().mockResolvedValueOnce({
+  mockInstallationClient1.rest = jest.fn();
+  mockInstallationClient1.rest.apps = jest.fn();
+  mockInstallationClient1.rest.apps.listReposAccessibleToInstallation = jest.fn().mockResolvedValueOnce({
     data: { repositories: [{ name: "config-policy-controller" }, { name: "governance-policy-propagator" }] },
   });
 
   const mockInstallationClient2 = jest.fn();
-  mockInstallationClient2.apps = jest.fn();
-  mockInstallationClient2.apps.listReposAccessibleToInstallation = jest.fn().mockResolvedValueOnce({
+  mockInstallationClient2.rest = jest.fn();
+  mockInstallationClient2.rest.apps = jest.fn();
+  mockInstallationClient2.rest.apps.listReposAccessibleToInstallation = jest.fn().mockResolvedValueOnce({
     data: { repositories: [{ name: "Toy Story" }, { name: "The Money Pit" }] },
   });
 
-  syncer.getGitHubClient = jest.fn((installationID?: number) => {
+  syncer.getProbotOctokit = jest.fn((installationID?: number) => {
     if (installationID === 1) {
       return mockInstallationClient1;
     }
