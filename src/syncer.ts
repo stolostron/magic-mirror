@@ -1,6 +1,6 @@
-import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { components } from "@octokit/openapi-types";
+import { ProbotOctokit } from "probot";
 import winston from "winston";
 
 import { Config } from "./config";
@@ -14,7 +14,7 @@ import { newLogger } from "./log";
  */
 export class Syncer {
   // appClient is the GitHub client authenticated as the GitHub app itself.
-  private appClient?: Octokit;
+  private appClient?: ProbotOctokit;
   // config is the user provided configuration.
   private config: Config;
   // db is the database used to keep track of actions the bot has taken.
@@ -24,7 +24,7 @@ export class Syncer {
   // orgs is an object where the keys are GitHub organizations and each value has the associated GitHub client
   // authenticated as the GitHub app installation, the GitHub app installation ID, and the repo names that the GitHub
   // app is installed on.
-  private orgs: { [key: string]: { client?: Octokit; installationID?: number; repos?: Set<string> } };
+  private orgs: { [key: string]: { client?: ProbotOctokit; installationID?: number; repos?: Set<string> } };
   // upstreamOrgRepos is an object where the keys are upstream organizations that are configured
   // to be monitored and the values are sets of the repo names that are publicly accessible.
   private upstreamOrgRepos: { [key: string]: Set<string> } = {};
@@ -42,7 +42,7 @@ export class Syncer {
 
   /**
    * Close a pull-request (PR) created by the GitHub app.
-   * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+   * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization where the PR exists.
    * @param {string} repo the GitHub repository where the PR exists.
    * @param {number} prID the ID of the PR to close.
@@ -50,14 +50,14 @@ export class Syncer {
    *   the PR was closed before the function was called, which can happen if the webhook receiver merged the PR and
    *   hadn't updated the database yet.
    */
-  private async closePR(client: Octokit, org: string, repo: string, prID: number): Promise<boolean> {
+  private async closePR(client: ProbotOctokit, org: string, repo: string, prID: number): Promise<boolean> {
     // Check if the PR is already closed first
-    const pr = await client.pulls.get({ owner: org, repo: repo, pull_number: prID });
+    const pr = await client.rest.pulls.get({ owner: org, repo: repo, pull_number: prID });
     if (pr.data.state === "closed") {
       return false;
     }
 
-    await client.issues.createComment({
+    await client.rest.issues.createComment({
       owner: org,
       repo: repo,
       issue_number: prID,
@@ -66,7 +66,7 @@ export class Syncer {
         '<img src="https://media.giphy.com/media/7yojoQtevjOCI/giphy.gif" width=350px>',
     });
 
-    await client.pulls.update({ owner: org, repo: repo, pull_number: prID, state: "closed" });
+    await client.rest.pulls.update({ owner: org, repo: repo, pull_number: prID, state: "closed" });
 
     return true;
   }
@@ -75,9 +75,9 @@ export class Syncer {
    * Get a GitHub client authenticated as the GitHub app and optionally a specific installation.
    * @param {number} installationID the optional GitHub app installation ID to authenticate as. If this is not set,
    *   the client is only authenticated as the GitHub app.
-   * @return {Octokit} the authenticated GitHub client.
+   * @return {ProbotOctokit} the authenticated GitHub client.
    */
-  private getGitHubClient(installationID?: number): Octokit {
+  private getProbotOctokit(installationID?: number): ProbotOctokit {
     const auth: any = {
       appId: this.config.appID,
       privateKey: this.config.privateKey,
@@ -87,17 +87,17 @@ export class Syncer {
       auth.installationId = installationID;
     }
 
-    return new Octokit({ authStrategy: createAppAuth, auth: auth });
+    return new ProbotOctokit({ authStrategy: createAppAuth, auth: auth });
   }
 
   /**
    * Get the latest merged PR on any branch.
-   * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+   * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization to search.
    * @param {string} repo the GitHub repository to search.
    * @return {Promise<number | null>} a Promise that resolves to the latest PR ID or null if there are no PRs yet.
    */
-  private async getLatestPRID(client: Octokit, org: string, repo: string): Promise<number | null> {
+  private async getLatestPRID(client: ProbotOctokit, org: string, repo: string): Promise<number | null> {
     // Can't use pulls.list since you can't filter on if the PR is merged
     const resp = await client.rest.search.issuesAndPullRequests({
       q: `repo:${org}/${repo}+is:pr+is:merged`,
@@ -118,7 +118,7 @@ export class Syncer {
    * Note that this doesn't handle the case where two PRs are merged at the same exact second that Magic Mirror is
    * querying upstream for merged PRs and only one of the two PRs is returned. This is extremely unlikely and accounting
    * for this would lead to a much less efficient implementation.
-   * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+   * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization to search.
    * @param {string} repo the GitHub repository to search.
    * @param {number} lastHandledPRID the PR ID to search from.
@@ -126,12 +126,12 @@ export class Syncer {
    *   were merged.
    */
   private async getMergedPRIDs(
-    client: Octokit,
+    client: ProbotOctokit,
     org: string,
     repo: string,
     lastHandledPRID: number,
   ): Promise<Array<number>> {
-    const lastHandledPR = await client.pulls.get({ owner: org, repo: repo, pull_number: lastHandledPRID });
+    const lastHandledPR = await client.rest.pulls.get({ owner: org, repo: repo, pull_number: lastHandledPRID });
     const lastPRMergedAt = new Date(lastHandledPR.data.merged_at as string);
 
     let page = 1;
@@ -195,21 +195,25 @@ export class Syncer {
 
   /**
    * Get the PR patch locations for input in the applyPatches function.
-   * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+   * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization where the PR is located.
    * @param {string} repo the GitHub repository where the PR is located.
    * @param {Array<number>} prIDs the PR IDs to get the patch locations from.
    * @return {Promise<Array<patchLocation>>} a Promise that resolves to an array of patchLocation objects.
    */
   private async getPRPatchLocations(
-    client: Octokit,
+    client: ProbotOctokit,
     org: string,
     repo: string,
     prIDs: Array<number>,
   ): Promise<Array<patchLocation>> {
     const rv: Array<patchLocation> = [];
 
-    const prs = await Promise.all(prIDs.map((prID) => client.pulls.get({ owner: org, pull_number: prID, repo: repo })));
+    const prs = await Promise.all(
+      prIDs.map((prID) =>
+        client.rest.pulls.get({ owner: org, pull_number: prID, repo: repo }),
+      ),
+    );
     prs.forEach((pr, i) => {
       rv.push({
         head: pr.data.merge_commit_sha as string,
@@ -223,7 +227,7 @@ export class Syncer {
 
   /**
    * Get the mapping of target branches to their respective PRs.
-   * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+   * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} org the GitHub organization where the PRs are located.
    * @param {string} repo the GitHub repository where the PRs are located.
    * @param {Array<number>} prIDs the PR IDs to get target branches for in ascending order of when they were merged.
@@ -231,13 +235,17 @@ export class Syncer {
    *   are the respective PR IDs.
    */
   private async getBranchToPRIDs(
-    client: Octokit,
+    client: ProbotOctokit,
     org: string,
     repo: string,
     prIDs: Array<number>,
   ): Promise<{ [key: string]: Array<number> }> {
     const rv: { [key: string]: Array<number> } = {};
-    const prs = await Promise.all(prIDs.map((prID) => client.pulls.get({ owner: org, repo: repo, pull_number: prID })));
+    const prs = await Promise.all(
+      prIDs.map((prID) =>
+        client.rest.pulls.get({ owner: org, repo: repo, pull_number: prID }),
+      ),
+    );
     prs.forEach((pr, i) => {
       if (!rv[pr.data.base.ref]) {
         rv[pr.data.base.ref] = [];
@@ -283,9 +291,9 @@ export class Syncer {
         throw new Error(`The upstreamOrgs mapping specifies the org ${installationOrg} which is not installed`);
       }
 
-      let repos: Array<components["schemas"]["minimal-repository"]> = [];
-
       for (const org in this.config.upstreamMappings[installationOrg]) {
+        let repos: Array<components["schemas"]["minimal-repository"]> = [];
+
         if (!this.upstreamOrgRepos[org]) {
           this.upstreamOrgRepos[org] = new Set<string>();
         }
@@ -294,9 +302,9 @@ export class Syncer {
         let page = 1;
 
         while (true) {
-          const resp = await this.orgs[installationOrg].client?.repos
+          const resp = await this.orgs[installationOrg].client?.rest.repos
             .listForOrg({ org: org, type: "public", page: page, per_page: 20 })
-            .catch((err) => {
+            .catch((err: { status?: number }) => {
               if (err.status === 404) {
                 this.logger.debug(`Could not find the org ${org}, assuming it's a user`);
                 isUserRepo = true;
@@ -323,7 +331,7 @@ export class Syncer {
           page = 1;
 
           while (true) {
-            const resp = await this.orgs[installationOrg].client?.repos.listForUser({
+            const resp = await this.orgs[installationOrg].client?.rest.repos.listForUser({
               username: org,
               per_page: 20,
               page: page,
@@ -377,7 +385,7 @@ export class Syncer {
       return;
     }
 
-    const client = this.orgs[org].client as Octokit;
+    const client = this.orgs[org].client as ProbotOctokit;
     const lastHandledPR = await this.db?.getLastHandledPR(repo, upstreamRepo, branch);
     if (lastHandledPR === null) {
       this.logger.info(
@@ -424,7 +432,7 @@ export class Syncer {
 
       this.logger.info(
         `Closing the PR #${pendingPR.prID} to create a new PR with new upstream commits on the branch "${branch}" ` +
-          `on ${org}/${repoName}`,
+        `on ${org}/${repoName}`,
       );
       closedPreviousPR = pendingPR.prID as number;
 
@@ -432,7 +440,7 @@ export class Syncer {
       if (!wasClosed) {
         this.logger.info(
           `The PR #${pendingPR.prID} on the branch "${branch}" on ${org}/${repoName} was already closed. Will skip ` +
-            "for now for the webhook handler to make the proper database updates.",
+          "for now for the webhook handler to make the proper database updates.",
         );
 
         return;
@@ -444,7 +452,7 @@ export class Syncer {
     const targetBranch = `magic-mirror-${upstreamBranch}-${Date.now()}`;
     this.logger.info(
       `Creating the "${targetBranch}" branch on ${org}/${repoName} from the following PRs from ` +
-        `${upstreamOrg}/${repoName}: ${prIDs.join(", ")}`,
+      `${upstreamOrg}/${repoName}: ${prIDs.join(", ")}`,
     );
 
     const patchLocations = await this.getPRPatchLocations(client, upstreamOrg, repoName, prIDs);
@@ -466,7 +474,7 @@ export class Syncer {
     } catch (err) {
       this.logger.error(
         `Failed to apply the patches on the "${branch}" branch on ${org}/${repoName} from the following PRs from ` +
-          ` ${upstreamOrg}/${repoName} ${prIDs.join(", ")}: ${err}`,
+        ` ${upstreamOrg}/${repoName} ${prIDs.join(", ")}: ${err}`,
       );
       const patchCmd = patchLocations.map((p) => {
         return `git cherry-pick -x ${p.head}~${p.numCommits}..${p.head} --allow-empty --keep-redundant-commits`;
@@ -511,7 +519,7 @@ export class Syncer {
     }
 
     this.logger.info(`Creating a PR on the branch "${branch}" on ${org}/${repoName} from the branch "${targetBranch}"`);
-    const newPR = await client.pulls.create({
+    const newPR = await client.rest.pulls.create({
       owner: org,
       repo: repoName,
       head: targetBranch,
@@ -522,7 +530,7 @@ export class Syncer {
 
     this.logger.info(`Created the PR ${newPR.data.html_url}`);
 
-    await this.db?.setPendingPR({
+    const newPendingPR: PendingPR = {
       repo: repo,
       upstreamRepo: upstreamRepo,
       upstreamPRIDs: prIDs,
@@ -531,17 +539,18 @@ export class Syncer {
       branch: branch,
       prID: newPR.data.number,
       githubIssue: null,
-    });
+    };
+    await this.db?.setPendingPR(newPendingPR);
 
     const requiredChecks = await getRequiredChecks(client, org, repoName, branch);
     if (requiredChecks.size === 0) {
       this.logger.info(`No checks are required for the PR ${newPR.data.html_url}. Will merge now.`);
 
-      const merged = await mergePR(client, this.db as Database, pendingPR as PendingPR, newPR.data.head.sha);
+      const merged = await mergePR(client, this.db as Database, newPendingPR, newPR.data.head.sha);
       if (!merged) {
         this.logger.info(
           `Created a GitHub issue #${pendingPR?.githubIssue} on ${org}/${repoName} to notify of the failure to merge ` +
-            ` the PR (#${newPR.data.number})`,
+          ` the PR (#${newPR.data.number})`,
         );
       }
     }
@@ -557,9 +566,9 @@ export class Syncer {
       await this.db.init();
     }
 
-    this.appClient = this.getGitHubClient();
+    this.appClient = this.getProbotOctokit();
 
-    const resp = await this.appClient.apps.listInstallations();
+    const resp = await this.appClient.rest.apps.listInstallations();
     for (const installation of resp["data"]) {
       const org = installation.account?.login as string;
       if (!this.orgs[org]) {
@@ -567,10 +576,10 @@ export class Syncer {
       }
       this.orgs[org].installationID = installation["id"];
 
-      const client = this.getGitHubClient(installation["id"]);
+      const client = this.getProbotOctokit(installation["id"]);
       this.orgs[org].client = client;
 
-      const resp = await client.apps.listReposAccessibleToInstallation();
+      const resp = await client.rest.apps.listReposAccessibleToInstallation();
       for (const repo of resp["data"]["repositories"]) {
         if (!this.orgs[org].repos) {
           this.orgs[org].repos = new Set<string>();

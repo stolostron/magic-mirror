@@ -2,19 +2,33 @@
   "name": "magic-mirror",
   "version": "1.3.2",
   "description": "GitHub App that syncs upstream repositories with forks using PRs",
-  "engines": {
-    "node": ">=24"
-  },
+  "license": "GPL-3.0-or-later",
+  "author": "Red Hat",
   "scripts": {
     "build": "npx tsc",
-    "lint": "eslint src --ext .ts",
     "dev": "npm run build && touch magic-mirror.db && concurrently npm:syncer npm:web -n syncer,web -c green,blue",
+    "lint": "eslint src --ext .ts",
     "syncer": "node ./build/scripts/start-syncer.js",
-    "web": "node ./build/scripts/start-web.js",
-    "test": "jest --runInBand ./src"
+    "test": "jest --runInBand ./src",
+    "web": "node ./build/scripts/start-web.js"
   },
-  "author": "Red Hat",
-  "license": "GPL-3.0-or-later",
+  "jest": {
+    "collectCoverage": true,
+    "coverageThreshold": {
+      "global": {
+        "lines": 90
+      }
+    },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(@octokit|@probot|before-after-hook|find-up-simple|import-meta-resolve|load-json-file|npx-import-light|octokit-auth-probot|package-config|probot|universal-github-app-jwt|universal-user-agent)/)"
+    ],
+    "moduleNameMapper": {
+      "^@octokit/auth-unauthenticated$": "<rootDir>/node_modules/@octokit/auth-unauthenticated/dist-src/index.js",
+      "^@octokit/plugin-enterprise-compatibility$": "<rootDir>/node_modules/@octokit/plugin-enterprise-compatibility/dist-src/index.js",
+      "^@octokit/webhooks-methods$": "<rootDir>/node_modules/@octokit/webhooks-methods/dist-node/index.js",
+      "^@probot/octokit-plugin-config$": "<rootDir>/node_modules/@probot/octokit-plugin-config/dist-src/index.js"
+    }
+  },
   "dependencies": {
     "@octokit/auth-app": "^8.2.0",
     "@octokit/openapi-types": "^27.0.0",
@@ -30,13 +44,18 @@
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",
     "@babel/preset-typescript": "^7.28.5",
-    "@tsconfig/node20": "^20.1.9",
+    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/js": "^10.0.1",
+    "@octokit/webhooks": "^14.2.0",
+    "@octokit/webhooks-methods": "^6.0.0",
+    "@tsconfig/node24": "^24.0.4",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/supertest": "^7.2.0",
     "@types/tmp": "^0.2.6",
     "@typescript-eslint/eslint-plugin": "^8.57.1",
     "@typescript-eslint/parser": "^8.56.1",
+    "babel-plugin-transform-import-meta": "^2.3.3",
     "concurrently": "^9.2.1",
     "eslint": "^10.0.3",
     "eslint-config-google": "^0.14.0",
@@ -47,12 +66,7 @@
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
   },
-  "jest": {
-    "collectCoverage": true,
-    "coverageThreshold": {
-      "global": {
-        "lines": 90
-      }
-    }
+  "engines": {
+    "node": ">=24"
   }
 }
