@@ -14,6 +14,7 @@ import issueClosed from "./fixtures/issues.closed.json";
 import prClosed from "./fixtures/pull_request.closed.json";
 import status from "./fixtures/status.json";
 
+
 let config: Config;
 let db: Database;
 let dirObj: tmp.DirResult;
@@ -237,6 +238,10 @@ test("check_run.completed failed check run", async () => {
     .patch("/repos/stolostron/config-policy-controller/pulls/6", (body: any) => {
       const prContent = body.body as string;
       expect(prContent.includes("Closes #7")).toBe(true);
+      return true;
+    })
+    .reply(200)
+    .patch("/repos/stolostron/config-policy-controller/issues/6", (body: any) => {
       const issueAssignees = body.assignees as Array<string>;
       expect(issueAssignees.some((assignee) => {
         return assignee == "doctorwho";
@@ -279,7 +284,9 @@ test("check_run.completed failed other check run", async () => {
     .reply(200, {
       protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "other test"] } },
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=1",
+    )
     .reply(200, {
       check_runs: [
         { name: "KinD tests (1.17, latest)", conclusion: "success" },
@@ -313,13 +320,15 @@ test("check_run.completed failed other commit status ", async () => {
     .reply(200, {
       protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=1")
     .reply(200, {
       check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=2")
     .reply(200, { check_runs: [] })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=1")
     .reply(200, [{ context: "dco", state: "failure" }]);
 
   // @ts-expect-error since the event JSON is incomplete
@@ -348,15 +357,17 @@ test("check_run.completed missing required check runs", async () => {
     .reply(200, {
       protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=1")
     .reply(200, {
       check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=2")
     .reply(200, { check_runs: [] })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=1")
     .reply(200, [{ context: "not required", state: "success" }])
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=2")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=2")
     .reply(200, []);
 
   // @ts-expect-error since the event JSON is incomplete
@@ -385,15 +396,17 @@ test("check_run.completed merge failure", async () => {
     .reply(200, {
       protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=1")
     .reply(200, {
       check_runs: [{ name: "KinD tests (1.17, latest)", conclusion: "success" }],
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=2")
     .reply(200, { check_runs: [] })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=1")
     .reply(200, [{ context: "dco", state: "success" }])
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=2")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=2")
     .reply(200, [])
     .put("/repos/stolostron/config-policy-controller/pulls/6/merge")
     .reply(400)
@@ -433,21 +446,23 @@ test("check_run.completed", async () => {
     .reply(200, {
       protection: { enabled: true, required_status_checks: { contexts: ["KinD tests (1.17, latest)", "dco"] } },
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=1")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=1")
     .reply(200, {
       check_runs: [
         { name: "KinD tests (1.17, latest)", conclusion: "success" },
         { name: "Not required", conclusion: "failure" },
       ],
     })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/check-runs?page=2")
+    .get(
+      "/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/check-runs?page=2")
     .reply(200, { check_runs: [] })
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=1")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=1")
     .reply(200, [
       { context: "dco", state: "success" },
       { context: "not required", state: "failure" },
     ])
-    .get("/repos/stolostron/config-policy-controller/commits/changes/statuses?page=2")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/statuses?page=2")
     .reply(200, [])
     .put("/repos/stolostron/config-policy-controller/pulls/6/merge", (body: any) => {
       // Verify that the PR was merged
@@ -480,7 +495,7 @@ test("status commit status success on PR", async () => {
   await db.setLastHandledPR(repo, upstreamRepo, "main", 1);
 
   const mock = nock("https://api.github.com")
-    .get("/repos/stolostron/config-policy-controller/pulls?head=db26c3e57ca3a959ca5aad62de7213c562f8c832")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/pulls")
     .reply(200, [
       {
         base: {
@@ -557,7 +572,7 @@ test("status commit status failure on PR", async () => {
   statusFailure.state = "failure";
 
   const mock = nock("https://api.github.com")
-    .get("/repos/stolostron/config-policy-controller/pulls?head=db26c3e57ca3a959ca5aad62de7213c562f8c832")
+    .get("/repos/stolostron/config-policy-controller/commits/db26c3e57ca3a959ca5aad62de7213c562f8c832/pulls")
     .reply(200, [
       {
         base: {
@@ -652,6 +667,11 @@ test("pull_request.closed pending PR", async () => {
 });
 
 test("/status", async () => {
-  const server = await getProbotServer(config, db);
-  await request(server.expressApp).get("/status").expect("Content-Type", "text/plain; charset=utf-8").expect(200, "OK");
+  const probotServer = await getProbotServer(config, db, { host: "127.0.0.1", port: 0 });
+  const httpServer = await probotServer.start();
+  try {
+    await request(httpServer).get("/status").expect("Content-Type", "text/plain; charset=utf-8").expect(200, "OK");
+  } finally {
+    await probotServer.stop();
+  }
 });
