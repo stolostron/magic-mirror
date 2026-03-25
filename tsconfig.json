@@ -1,18 +1,12 @@
 {
-    "extends": "@tsconfig/node20/tsconfig.json",
-    "compilerOptions": {
-        "outDir": "build",
-        "module": "NodeNext",
-        "sourceMap": true,
-        "resolveJsonModule": true,
-        "rootDir": "./src"
-    },
-    "include": [
-        "src"
-    ],
-    "exclude": [
-        "node_modules"
-    ],
+  "extends": "@tsconfig/node24/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "build",
+    "module": "NodeNext",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "rootDir": "./src",
+    "isolatedModules": true,
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -21,4 +15,7 @@
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
     "alwaysStrict": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
