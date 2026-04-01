@@ -1,24 +1,29 @@
 import { createFailureIssue, getOwners } from "./github";
 
-test("createFailureIssue", () => {
+function mockIssuesCreate() {
+  return jest.fn(() =>
+    Promise.resolve({
+      data: { number: 6 },
+    }),
+  );
+}
+
+test("createFailureIssue", async () => {
+  const create = mockIssuesCreate();
   const mockClient = {
-    issues: {
-      create: jest.fn(() => {
-        return new Promise((resolve) => {
-          resolve({
-            data: { number: 6 },
-          });
-        });
-      }),
+    rest: {
+      issues: {
+        create,
+      },
     },
   };
 
-  expect(
+  await expect(
     // @ts-ignore
     createFailureIssue(mockClient, "kramerica", "industries", "upstream", "main", [5, 7], "it failed"),
   ).resolves.toEqual(6);
 
-  expect(mockClient.issues.create.mock.calls.length).toEqual(1);
+  expect(create.mock.calls.length).toEqual(1);
 
   const expectedIssueArgs = {
     body:
@@ -31,28 +36,25 @@ test("createFailureIssue", () => {
     repo: "industries",
     title: "😿 Failed to sync the upstream PRs: #5, #7",
   };
-  expect(mockClient.issues.create).toHaveBeenCalledWith(expectedIssueArgs);
+  expect(create).toHaveBeenCalledWith(expectedIssueArgs);
 });
 
-test("createFailureIssue with prID", () => {
+test("createFailureIssue with prID", async () => {
+  const create = mockIssuesCreate();
   const mockClient = {
-    issues: {
-      create: jest.fn(() => {
-        return new Promise((resolve) => {
-          resolve({
-            data: { number: 6 },
-          });
-        });
-      }),
+    rest: {
+      issues: {
+        create,
+      },
     },
   };
 
-  expect(
+  await expect(
     // @ts-ignore
     createFailureIssue(mockClient, "kramerica", "industries", "upstream", "main", [5, 7], "it failed", 3),
   ).resolves.toEqual(6);
 
-  expect(mockClient.issues.create.mock.calls.length).toEqual(1);
+  expect(create.mock.calls.length).toEqual(1);
 
   const expectedIssueArgs = {
     body:
@@ -66,31 +68,37 @@ test("createFailureIssue with prID", () => {
     repo: "industries",
     title: "😿 Failed to sync the upstream PRs: #5, #7",
   };
-  expect(mockClient.issues.create).toHaveBeenCalledWith(expectedIssueArgs);
+  expect(create).toHaveBeenCalledWith(expectedIssueArgs);
 });
 
-test("createFailureIssue with patchCmd", () => {
+test("createFailureIssue with patchCmd", async () => {
+  const create = mockIssuesCreate();
   const mockClient = {
-    issues: {
-      create: jest.fn(() => {
-        return new Promise((resolve) => {
-          resolve({
-            data: { number: 6 },
-          });
-        });
-      }),
+    rest: {
+      issues: {
+        create,
+      },
     },
   };
 
-  expect(
+  await expect(
     createFailureIssue(
       // @ts-ignore
-      mockClient, "kramerica", "industries", "upstream", "main",
-      [5, 7], "it failed", undefined, ["skywalker"], ["git cherry-pick"], Error("ya pick failed"),
+      mockClient,
+      "kramerica",
+      "industries",
+      "upstream",
+      "main",
+      [5, 7],
+      "it failed",
+      undefined,
+      ["skywalker"],
+      ["git cherry-pick"],
+      Error("ya pick failed"),
     ),
   ).resolves.toEqual(6);
 
-  expect(mockClient.issues.create.mock.calls.length).toEqual(1);
+  expect(create.mock.calls.length).toEqual(1);
 
   const expectedIssueArgs = {
     body:
@@ -109,20 +117,23 @@ test("createFailureIssue with patchCmd", () => {
     title: "😿 Failed to sync the upstream PRs: #5, #7",
     assignees: ["skywalker"],
   };
-  expect(mockClient.issues.create).toHaveBeenCalledWith(expectedIssueArgs);
+  expect(create).toHaveBeenCalledWith(expectedIssueArgs);
 });
 
-test("getOwners", () => {
+test("getOwners", async () => {
+  const getContent = jest.fn(() => {
+    return new Promise((resolve) => resolve({ data: { content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" } }));
+  });
   const mockClient = {
-    repos: {
-      getContent: jest.fn(() => {
-        return new Promise((resolve) => resolve({ content: "YXBwcm92ZXJzOgotIHNreXdhbGtlcgotIGRvY3Rvcndobwo=" }));
-      }),
+    rest: {
+      repos: {
+        getContent,
+      },
     },
   };
 
   const expectedOwners = ["skywalker", "doctorwho"];
 
   // @ts-ignore
-  expect(getOwners(mockClient, "", "", "")).resolves.toEqual(expectedOwners);
+  await expect(getOwners(mockClient, "", "", "")).resolves.toEqual(expectedOwners);
 });

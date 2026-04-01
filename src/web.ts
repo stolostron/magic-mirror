@@ -1,6 +1,5 @@
-import { Octokit } from "@octokit/rest";
 import { CheckRunPullRequest, PullRequest } from "@octokit/webhooks-types";
-import { ApplicationFunctionOptions, Probot, Server } from "probot";
+import { ApplicationFunctionOptions, Probot, ProbotOctokit, Server } from "probot";
 
 import { Config, loadConfig } from "./config";
 import { Database, PRAction } from "./db";
@@ -18,15 +17,6 @@ const okayCheckRunConclusions = new Set(["success", "neutral", "skipped"]);
  */
 export async function app(probot: Probot, probotOptions: ApplicationFunctionOptions, config: Config, db: Database) {
   const logger = newLogger(config.logLevel);
-
-  // Add a status endpoint for liveness probes
-  if (probotOptions.getRouter) {
-    const router = probotOptions.getRouter();
-    router.get("/status", (_, res) => {
-      res.contentType("text/plain; charset=utf-8");
-      res.send("OK");
-    });
-  }
 
   /**
    * Handle a closed GitHub issue.
@@ -52,12 +42,12 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
 
     logger.info(
       `The issue #${issueID} on ${organization}/${repoName} was closed. Resuming syncing of ` +
-        `${organization}/${repoName} for the forked branch of "${pendingPR.branch}".`,
+      `${organization}/${repoName} for the forked branch of "${pendingPR.branch}".`,
     );
 
     if (pendingPR.prID) {
       logger.debug(`Closing the PR #${pendingPR.prID} on ${organization}/${repoName} since the issue was closed`);
-      await context.octokit.pulls.update({
+      await context.octokit.rest.pulls.update({
         owner: organization,
         repo: repoName,
         pull_number: pendingPR.prID,
@@ -132,11 +122,14 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
 
     const organization = status.repository.owner.login;
     const repo = status.repository.name;
-    const prs = await context.octokit.pulls.list({
-      owner: status.repository.owner.login,
-      repo: status.repository.name,
-      head: status.sha,
-    });
+    const prs = await context.octokit.request(
+      "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+      {
+        owner: organization,
+        repo,
+        commit_sha: status.sha,
+      },
+    );
 
     // It's unlikely that there are multiple PRs with the same commit head, but stranger things have happened.
     for (const pr of prs.data) {
@@ -179,7 +172,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
     if (pendingPR.githubIssue) {
       logger.info(
         `The PR #${pr.number} on ${organization}/${repoName} closed but there is still the open GitHub issue ` +
-          `#${pendingPR.githubIssue}. Skipping any action for now.`,
+        `#${pendingPR.githubIssue}. Skipping any action for now.`,
       );
       return;
     }
@@ -204,7 +197,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
    *
    * Note that a PR could get stuck if the required checks on the branch change while the PR CI is still running.
    *
-   * @param {Octokit} client the GitHub client to use that is authenticated as the GitHub installation.
+   * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} organization the GitHub organization of the repository that the PR belongs to.
    * @param {string} repoName the GitHub repository name of the repository that the PR belongs to.
    * @param {PullRequest | CheckRunPullRequest} pr the pull-request that the CI update is for.
@@ -214,7 +207,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
    *   if the PR is blocked or isn't known to Magic Mirror.
    */
   const handlePRCIUpdate = async (
-    client: Octokit,
+    client: ProbotOctokit,
     organization: string,
     repoName: string,
     pr: PullRequest | CheckRunPullRequest,
@@ -251,7 +244,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
       try {
         const owners = await getOwners(client, organization, repoName, pr.base.ref);
 
-        for (const author in pendingPR.upstreamAuthors) {
+        for (const author of pendingPR.upstreamAuthors) {
           if (owners.includes(author)) {
             assignees.push(author);
           }
@@ -293,10 +286,10 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
     // Verify that this is the last required check run/status that we were waiting on.
     let page = 1;
     while (true) {
-      const checks = await client.checks.listForRef({
+      const checks = await client.rest.checks.listForRef({
         owner: organization,
         repo: repoName,
-        ref: pr.head.ref,
+        ref: pr.head.sha,
         page: page,
       });
       if (checks.data.check_runs.length === 0) {
@@ -311,7 +304,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
         if (!okayCheckRunConclusions.has(checkRun.conclusion as string)) {
           logger.debug(
             `The check run #${checkRun.id} on the PR #${pr.number} on ${organization}/${repoName} has a conclusion ` +
-              `of ${checkRun.conclusion}. Ignoring for now since another webhook event will handle this.`,
+            `of ${checkRun.conclusion}. Ignoring for now since another webhook event will handle this.`,
           );
           return true;
         }
@@ -326,10 +319,10 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
     if (remainingChecks.size) {
       page = 1;
       while (true) {
-        const statuses = await client.repos.listCommitStatusesForRef({
+        const statuses = await client.rest.repos.listCommitStatusesForRef({
           owner: organization,
           repo: repoName,
-          ref: pr.head.ref,
+          ref: pr.head.sha,
           page: page,
         });
         if (statuses.data.length === 0) {
@@ -344,7 +337,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
           if (status.state !== "success") {
             logger.debug(
               `The commit status #${status.id} on the PR #${pr.number} on ${organization}/${repoName} has a state ` +
-                `of ${status.state}. Ignoring for now since another webhook event will handle this.`,
+              `of ${status.state}. Ignoring for now since another webhook event will handle this.`,
             );
             return true;
           }
@@ -359,7 +352,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
     if (remainingChecks.size) {
       logger.info(
         `There are still remaining check runs/statuses that aren't registered on the PR #${pr.number} on ` +
-          `${organization}/${repoName}.`,
+        `${organization}/${repoName}.`,
       );
       return true;
     }
@@ -375,7 +368,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
       // The GitHub issue is created in the mergePR function. The log message is here to provide more context.
       logger.info(
         `Created a GitHub issue on ${organization}/${repoName} to notify of the failure to merge the PR ` +
-          `(#${pr.number})`,
+        `(#${pr.number})`,
       );
     }
 
@@ -387,19 +380,37 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
  * Get the configured Probot Server instance.
  * @param {Config} config the configuration object to configure Probot with.
  * @param {Database} db the Database object to use in the Probot event handlers.
+ * @param {object} [listenOptions] optional host/port for the HTTP server (e.g. a free port reserved for tests).
  * @return {Promise<Server>} a Promise that resolves to a configured Probot Server instance.
  */
-export async function getProbotServer(config: Config, db: Database): Promise<Server> {
+export async function getProbotServer(
+  config: Config,
+  db: Database,
+  listenOptions?: { host?: string; port?: number },
+): Promise<Server> {
   const server = new Server({
     Probot: Probot.defaults({
       appId: config.appID,
       privateKey: config.privateKey,
       secret: config.webhookSecret,
     }),
+    port: listenOptions?.port,
+    host: listenOptions?.host,
   });
   await server.load((probot: Probot, probotOptions: ApplicationFunctionOptions) =>
     app(probot, probotOptions, config, db),
   );
+
+  // Add a status endpoint for liveness probes
+  server.addHandler((req, res) => {
+    const path = req.url?.split("?")[0] || "";
+    if (path !== "/status") {
+      return false;
+    }
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("OK");
+    return true;
+  });
 
   return server;
 }
