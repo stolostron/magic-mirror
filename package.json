@@ -35,8 +35,8 @@
     "@octokit/rest": "^22.0.1",
     "@octokit/webhooks-types": "^7.6.1",
     "js-yaml": "^4.1.0",
-    "probot": "^14.3.0",
-    "simple-git": "^3.33.0",
+    "probot": "^14.3.2",
+    "simple-git": "^3.36.0",
     "sqlite3": "^6.0.1",
     "tmp": "^0.2.5",
     "winston": "^3.19.0"
@@ -53,18 +53,18 @@
     "@types/js-yaml": "^4.0.9",
     "@types/supertest": "^7.2.0",
     "@types/tmp": "^0.2.6",
-    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^8.56.1",
     "babel-plugin-transform-import-meta": "^2.3.3",
     "concurrently": "^9.2.1",
-    "eslint": "^10.0.3",
+    "eslint": "^10.2.0",
     "eslint-config-google": "^0.14.0",
-    "globals": "^17.4.0",
+    "globals": "^17.5.0",
     "jest": "^30.3.0",
-    "nock": "^14.0.11",
+    "nock": "^14.0.12",
     "supertest": "^7.2.2",
-    "ts-jest": "^29.4.6",
-    "typescript": "^5.9.3"
+    "ts-jest": "^29.4.9",
+    "typescript": "^6.0.2"
   },
   "engines": {
     "node": ">=24"
