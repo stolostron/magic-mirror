@@ -1,6 +1,7 @@
 {
   "extends": "@tsconfig/node24/tsconfig.json",
   "compilerOptions": {
+    "types": ["@types/jest"],
     "outDir": "build",
     "module": "NodeNext",
     "sourceMap": true,
