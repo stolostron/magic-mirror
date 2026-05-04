@@ -42,7 +42,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.29.2",
+    "@babel/preset-env": "^7.29.3",
     "@babel/preset-typescript": "^7.28.5",
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^10.0.1",
@@ -53,15 +53,15 @@
     "@types/js-yaml": "^4.0.9",
     "@types/supertest": "^7.2.0",
     "@types/tmp": "^0.2.6",
-    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.56.1",
     "babel-plugin-transform-import-meta": "^2.3.3",
     "concurrently": "^9.2.1",
-    "eslint": "^10.2.1",
+    "eslint": "^10.3.0",
     "eslint-config-google": "^0.14.0",
-    "globals": "^17.5.0",
+    "globals": "^17.6.0",
     "jest": "^30.3.0",
-    "nock": "^14.0.13",
+    "nock": "^14.0.14",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
     "typescript": "^6.0.3"
