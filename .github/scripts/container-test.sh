@@ -42,6 +42,7 @@ function run_syncer() {
 
 function run_webhook_listener() {
   local exit_code=0
+  local response=""
   ${CONTAINER_ENGINE} run --detach --name=webhook-listener --entrypoint="" \
     -v="${data_path}:/etc/magic-mirror:Z" \
     magic-mirror npm run web 1>/dev/null
