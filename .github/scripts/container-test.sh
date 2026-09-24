@@ -45,15 +45,23 @@ function run_webhook_listener() {
   local response=""
   ${CONTAINER_ENGINE} run --detach --name=webhook-listener --entrypoint="" \
     -v="${data_path}:/etc/magic-mirror:Z" \
+    -p 3000:3000 \
     magic-mirror npm run web 1>/dev/null
   
   echo "Waiting for webhook listener to start..."
   for i in $(seq 1 10); do
-    response=$(${CONTAINER_ENGINE} exec webhook-listener curl -s localhost:3000/status) ||
+    response=$(${CONTAINER_ENGINE} exec webhook-listener curl -sf localhost:3000/status) || {
+        echo "Connection to webhook listener failed. Retrying (${i}/10)"
+        sleep 1
+        continue
+      }
+    response=$(curl -sf localhost:3000/status) ||
       {
         echo "Connection to webhook listener failed. Retrying (${i}/10)"
         sleep 1
+        continue
       }
+    break
   done
 
   if [ "${response}" != "OK" ]; then

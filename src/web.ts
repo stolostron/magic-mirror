@@ -425,6 +425,6 @@ export async function run() {
   const db = new Database(dbPath);
   await db.init();
 
-  const server = await getProbotServer(config, db);
+  const server = await getProbotServer(config, db, { host: process.env.HOST || "0.0.0.0" });
   await server.start();
 }
