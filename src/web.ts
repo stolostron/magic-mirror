@@ -394,6 +394,8 @@ export async function getProbotServer(
       privateKey: config.privateKey,
       secret: config.webhookSecret,
     }),
+    // The GitHub App webhook URL is the deployment root. Probot's default path is /api/github/webhooks.
+    webhookPath: "/",
     port: listenOptions?.port,
     host: listenOptions?.host,
   });
