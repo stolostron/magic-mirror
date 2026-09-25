@@ -675,3 +675,18 @@ test("/status", async () => {
     await probotServer.stop();
   }
 });
+
+test("POST / is the webhook endpoint", async () => {
+  const probotServer = await getProbotServer(config, db, { host: "127.0.0.1", port: 0 });
+  const httpServer = await probotServer.start();
+  try {
+    const response = await request(httpServer)
+      .post("/")
+      .set("Content-Type", "application/json")
+      .send({});
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/Required headers missing/);
+  } finally {
+    await probotServer.stop();
+  }
+});
