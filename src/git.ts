@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import simpleGit from "simple-git";
+import { simpleGit } from "simple-git";
 import tmp from "tmp";
 
 // patchLocation represents the head (commit hash of the start of the patch) and the number of commits as part of the

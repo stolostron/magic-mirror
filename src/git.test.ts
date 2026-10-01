@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import simpleGit, { SimpleGit } from "simple-git";
+import { simpleGit, SimpleGit } from "simple-git";
 import tmp from "tmp";
 
 import { applyPatches, patchLocation } from "./git";
