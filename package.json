@@ -20,7 +20,7 @@
       }
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(@octokit|@probot|before-after-hook|find-up-simple|import-meta-resolve|load-json-file|npx-import-light|octokit-auth-probot|package-config|probot|universal-github-app-jwt|universal-user-agent)/)"
+      "/node_modules/(?!(@octokit|@probot|before-after-hook|content-type|find-up-simple|import-meta-resolve|load-json-file|npx-import-light|octokit-auth-probot|package-config|probot|universal-github-app-jwt|universal-user-agent)/)"
     ],
     "moduleNameMapper": {
       "^@octokit/auth-unauthenticated$": "<rootDir>/node_modules/@octokit/auth-unauthenticated/dist-src/index.js",
