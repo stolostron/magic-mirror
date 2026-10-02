@@ -1,4 +1,3 @@
-import { CheckRunPullRequest, PullRequest } from "@octokit/webhooks-types";
 import { ApplicationFunctionOptions, Probot, ProbotOctokit, Server } from "probot";
 
 import { Config, loadConfig } from "./config";
@@ -7,6 +6,12 @@ import { createFailureIssue, getOwners, getRequiredChecks, mergePR, updatePR } f
 import { newLogger } from "./log";
 
 const okayCheckRunConclusions = new Set(["success", "neutral", "skipped"]);
+
+type PullRequestForCI = {
+  number: number;
+  base: { ref: string };
+  head: { sha: string };
+};
 
 /**
  * Add the handlers to Probot app.
@@ -200,7 +205,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
    * @param {ProbotOctokit} client the GitHub client to use that is authenticated as the GitHub installation.
    * @param {string} organization the GitHub organization of the repository that the PR belongs to.
    * @param {string} repoName the GitHub repository name of the repository that the PR belongs to.
-   * @param {PullRequest | CheckRunPullRequest} pr the pull-request that the CI update is for.
+   * @param {PullRequestForCI} pr the pull-request that the CI update is for.
    * @param {string} checkName the name of the commit status or check run that just completed.
    * @param {boolean} success determines if the commit status or check run was successful.
    * @return {Promise<boolean>} a Promise that resolves to a boolean indicating if the PR was handled. This is false if
@@ -210,7 +215,7 @@ export async function app(probot: Probot, probotOptions: ApplicationFunctionOpti
     client: ProbotOctokit,
     organization: string,
     repoName: string,
-    pr: PullRequest | CheckRunPullRequest,
+    pr: PullRequestForCI,
     checkName: string,
     success: boolean,
   ): Promise<boolean> => {
